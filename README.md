@@ -50,5 +50,3 @@ Project ini dibangun untuk membantu proses penjualan secara digital, mulai dari 
 Software Engineer — Indonesia
 GitHub: AldioYaspindoDev
 
-## 📁 Project Structure
-
