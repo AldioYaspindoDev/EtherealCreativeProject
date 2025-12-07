@@ -247,14 +247,14 @@ app.get("/", (req, res) => {
 });
 
 // Apply auth rate limiter to specific endpoints
-app.use("/api/admin/login", authLimiter);
-app.use("/api/admin/register", authLimiter);
+app.use("/admin/login", authLimiter);
+app.use("/admin/register", authLimiter);
 app.use("/customer/login", authLimiter);
 app.use("/customer/register", authLimiter);
 
 // Main routes
 app.use("/api/admin", userAdminRoute);
-app.use("/customer", userCustomerRouter);
+app.use("/api/customer", userCustomerRouter);
 app.use("/articles", articleRoutes);
 app.use("/catalogs", catalogRoutes);
 app.use("/feedbacks", feedbackRoute);
