@@ -16,7 +16,7 @@ const catalogRoutes = express.Router();
 const storage = new CloudinaryStorage({
   cloudinary: cloudinary,
   params: async (req, file) => {
-    console.log("📤 Multer processing file:", file.originalname);
+    console.log("Multer processing file:", file.originalname);
     return {
       folder: "katalog_produk",
       allowed_formats: ["jpeg", "jpg", "png", "gif", "webp"],
@@ -70,10 +70,10 @@ const upload = multer({
     const mimetype = allowedTypes.test(file.mimetype);
     
     if (extname && mimetype) {
-      console.log("✅ File type valid");
+      console.log("File type valid");
       cb(null, true);
     } else {
-      console.log("❌ File type invalid");
+      console.log("zile type invalid");
       cb(new Error("Hanya file gambar yang diperbolehkan"));
     }
   },
@@ -86,21 +86,19 @@ const upload = multer({
 // OPTIONAL UPLOAD FOR UPDATE
 // ===============================
 const optionalUpload = (req, res, next) => {
-  console.log("🔥 optionalUpload terpanggil!");
+  console.log("optionalUpload terpanggil!");
 
   const multerUpload = upload.array("images", 10);
 
   multerUpload(req, res, function (err) {
-    console.log("📸 req.files dari multer:", req.files);
-    console.log("📝 req.body setelah multer:", req.body);
 
     if (err instanceof multer.MulterError && err.code === "LIMIT_UNEXPECTED_FILE") {
-      console.log("⚠️ Tidak ada file pada update — lanjut");
+      console.log("Tidak ada file pada update — lanjut");
       return next();
     }
 
     if (err) {
-      console.error("❌ Multer error:", err);
+      console.error("Multer error:", err);
       return next(err);
     }
 
@@ -118,18 +116,18 @@ catalogRoutes.get("/", catalogController.getAllCatalog);
 // GET catalog by ID`
 catalogRoutes.get("/:id", catalogController.getCatalogById);
 
-// ✅ CREATE: Support multiple images upload
+// CREATE: Support multiple images upload
 // UBAH dari upload.single() ke upload.array()
 catalogRoutes.post(
   "/",
-  upload.array("images", 10), // ⬅️ PENTING: "images" dan array()
+  upload.array("images", 10), // PENTING: "images" dan array()
   catalogController.createCatalog
 );
 
-// ✅ UPDATE: Support multiple images upload
+// UPDATE: Support multiple images upload
 catalogRoutes.patch(
   "/:id",
-  optionalUpload, // ⬅️ PENTING: "images" dan array()
+  optionalUpload, // PENTING: "images" dan array()
   catalogController.updateCatalog
 );
 
@@ -179,7 +177,7 @@ catalogRoutes.use((err, req, res, next) => {
       message: err.message,
     });
   } else if (err) {
-    console.error("❌ General Error:", err);
+    console.error("General Error:", err);
     return res.status(400).json({
       success: false,
       message: err.message || "Terjadi kesalahan pada server",

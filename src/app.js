@@ -12,28 +12,115 @@ import catalogRoutes from "./routes/catalogRoute.js";
 import feedbackRoute from "./routes/feedbackRoutes.js";
 import keranjangrouter from "./routes/keranjangRoute.js";
 import PortofolioRouter from "./routes/portofolioRoute.js";
+import { errorHandler } from "./middleware/errorHandler.js";
+import AppError from "./utils/AppError.js";
 
 const app = express();
+
+// ========================================
+// TRUST PROXY
+// ========================================
+app.set("trust proxy", 1);
 
 // ========================================
 // SECURITY MIDDLEWARE
 // ========================================
 
-// 1. Helmet - Set secure HTTP headers
+// 1. Helmet - Secure HTTP headers
 app.use(
   helmet({
-    contentSecurityPolicy: false,
-    crossOriginEmbedderPolicy: false,
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'"],
+        imgSrc: ["'self'", "data:", "https:", "res.cloudinary.com"],
+        connectSrc: ["'self'"],
+        fontSrc: ["'self'"],
+        objectSrc: ["'none'"],
+        mediaSrc: ["'self'"],
+        frameSrc: ["'none'"],
+      },
+    },
+    hsts: {
+      maxAge: 31536000,
+      includeSubDomains: true,
+      preload: true,
+    },
+    frameguard: { action: 'deny' },
+    xssFilter: true,
+    noSniff: true,
+    ieNoOpen: true,
   })
 );
 
-// 2. Trust proxy (penting untuk rate limiting di balik reverse proxy)
-app.set("trust proxy", 1);
+// ========================================
+// STANDARD MIDDLEWARE (Before Rate Limiting)
+// ========================================
 
-// 3. Rate Limiting - Mencegah terlalu banyak request dari IP yang sama
+// Cookie Parser - Must be before CORS
+app.use(cookieParser());
+
+// CORS Configuration
+const FRONTEND_URL = process.env.CLIENT_URL || "http://localhost:3000";
+
+// Build allowed origins list
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:5173', // Vite
+  'http://localhost:3001', // Alternative port
+  'http://127.0.0.1:3000',
+  'http://127.0.0.1:5173',
+  FRONTEND_URL,
+].filter((origin, index, self) => self.indexOf(origin) === index);
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Allow requests with no origin (Postman, mobile apps, etc.)
+    if (!origin) {
+      console.log('✅ CORS: No origin (Postman/Mobile) - ALLOWED');
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      console.log(`✅ CORS: ${origin} - ALLOWED`);
+      callback(null, true);
+    } else {
+      console.warn(`❌ CORS: ${origin} - BLOCKED`);
+      console.warn(`   Allowed: ${allowedOrigins.join(', ')}`);
+      callback(new Error(`Not allowed by CORS: ${origin}`));
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
+  allowedHeaders: [
+    "Content-Type",
+    "Authorization",
+    "X-Requested-With",
+    "Accept",
+    "Origin"
+  ],
+  exposedHeaders: ["Set-Cookie"],
+  preflightContinue: false,
+  optionsSuccessStatus: 200,
+  maxAge: 86400,
+};
+
+// Apply CORS
+app.use(cors(corsOptions));
+
+// Body Parser with size limit
+app.use(express.json({ limit: "10mb" }));
+app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// ========================================
+// RATE LIMITING & SECURITY
+// ========================================
+
+// 2. Rate Limiting - General
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 menit
-  max: 100, // Maksimal 100 request per windowMs
+  windowMs: 15 * 60 * 1000,
+  max: 100,
   message: {
     success: false,
     message: "Terlalu banyak request dari IP ini, coba lagi dalam 15 menit",
@@ -48,18 +135,18 @@ const limiter = rateLimit({
   },
 });
 
-// Rate limit khusus untuk AUTH endpoints (lebih ketat)
+// 3. Rate Limiting - Auth (Stricter)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
+  skipSuccessfulRequests: true,
   message: {
     success: false,
     message: "Terlalu banyak percobaan login, coba lagi dalam 15 menit",
   },
-  skipSuccessfulRequests: true,
 });
 
-// Rate limit khusus untuk API yang sensitif
+// 4. Rate Limiting - Sensitive APIs
 const strictLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
   max: 10,
@@ -69,7 +156,7 @@ const strictLimiter = rateLimit({
   },
 });
 
-// 4. Speed Limiter - Memperlambat request yang terlalu cepat
+// 5. Speed Limiter
 const speedLimiter = slowDown({
   windowMs: 15 * 60 * 1000,
   delayAfter: 50,
@@ -81,96 +168,56 @@ const speedLimiter = slowDown({
 app.use(limiter);
 app.use(speedLimiter);
 
-// 5. Custom Mongo Sanitizer - Mencegah NoSQL injection
-const sanitizeInput = (req, res, next) => {
+// 6. NoSQL Injection Protection - CUSTOM IMPLEMENTATION (No library)
+const sanitizeNoSQL = (req, res, next) => {
   const sanitize = (obj) => {
-    if (obj && typeof obj === 'object') {
-      Object.keys(obj).forEach((key) => {
-        // Hapus keys yang mengandung $ atau .
-        if (key.startsWith('$') || key.includes('.')) {
-          delete obj[key];
-        } else if (typeof obj[key] === 'object') {
-          sanitize(obj[key]);
+    if (!obj || typeof obj !== 'object') return;
+
+    Object.keys(obj).forEach((key) => {
+      // Remove keys that start with $ or contain dots (MongoDB operators)
+      if (key.startsWith('$') || key.includes('.')) {
+        console.warn(`⚠️ Sanitized potentially malicious input: ${key}`);
+        delete obj[key];
+      } 
+      // Recursively sanitize nested objects
+      else if (typeof obj[key] === 'object' && obj[key] !== null) {
+        sanitize(obj[key]);
+      }
+      // Also check for $where and other dangerous patterns in strings
+      else if (typeof obj[key] === 'string') {
+        // Remove potential MongoDB query injections
+        const dangerous = ['$where', 'function', 'return'];
+        if (dangerous.some(pattern => obj[key].includes(pattern))) {
+          console.warn(`⚠️ Sanitized dangerous string pattern in: ${key}`);
+          obj[key] = obj[key].replace(/(\$where|function|return)/gi, '');
         }
-      });
-    }
+      }
+    });
   };
 
-  // Sanitize body, query, dan params
-  if (req.body) sanitize(req.body);
-  if (req.query) sanitize(req.query);
-  if (req.params) sanitize(req.params);
+  // Sanitize all request inputs
+  try {
+    if (req.body) sanitize(req.body);
+    if (req.query) sanitize(req.query);
+    if (req.params) sanitize(req.params);
+  } catch (error) {
+    console.error('❌ Sanitization error:', error);
+  }
 
   next();
 };
 
-app.use(sanitizeInput);
+// Apply custom NoSQL sanitizer
+app.use(sanitizeNoSQL);
 
-// 6. HPP - Mencegah HTTP Parameter Pollution
+// 7. HPP - HTTP Parameter Pollution
 app.use(hpp());
-
-// ========================================
-// STANDARD MIDDLEWARE
-// ========================================
-
-// Cookie Parser
-app.use(cookieParser());
-
-// CORS Configuration
-const FRONTEND_URL = process.env.CLIENT_URL || "http://localhost:3000";
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    // Allow requests with no origin (mobile apps, Postman, etc)
-    if (!origin) return callback(null, true);
-    
-    const allowedOrigins = [
-      'http://localhost:3000',
-      'http://127.0.0.1:3000',
-      FRONTEND_URL,
-    ];
-    
-    if (allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
-  allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With"],
-  exposedHeaders: ["Set-Cookie"],
-  preflightContinue: false,
-  optionsSuccessStatus: 204,
-};
-
-// Apply CORS middleware
-app.use(cors(corsOptions));
-
-// Body Parser dengan limit size
-app.use(express.json({ limit: "10mb" }));
-app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 // ========================================
 // ROUTES
 // ========================================
 
-// Apply auth rate limiter untuk endpoint authentication
-app.use("/api/admin/login", authLimiter);
-app.use("/api/admin/register", authLimiter);
-app.use("/customer/login", authLimiter);
-app.use("/customer/register", authLimiter);
-
-// Routes utama
-app.use("/api/admin", userAdminRoute);
-app.use("/customer", userCustomerRouter);
-app.use("/articles", articleRoutes);
-app.use("/catalogs", catalogRoutes);
-app.use("/feedbacks", feedbackRoute);
-app.use("/cart", keranjangrouter);
-app.use("/portofolio", PortofolioRouter);
-
-// Health Check / Test Route
+// Health Check (No rate limit)
 app.get("/test", (req, res) => {
   res.json({
     success: true,
@@ -185,29 +232,45 @@ app.get("/", (req, res) => {
   res.json({
     success: true,
     message: "API is running",
-    version: "1.0.0",
+    version: "2.0.0",
+    endpoints: {
+      health: "/test",
+      admin: "/api/admin",
+      customer: "/customer",
+      articles: "/articles",
+      catalogs: "/catalogs",
+      feedbacks: "/feedbacks",
+      cart: "/cart",
+      portfolio: "/portofolio"
+    }
   });
 });
+
+// Apply auth rate limiter to specific endpoints
+app.use("/api/admin/login", authLimiter);
+app.use("/api/admin/register", authLimiter);
+app.use("/customer/login", authLimiter);
+app.use("/customer/register", authLimiter);
+
+// Main routes
+app.use("/api/admin", userAdminRoute);
+app.use("/customer", userCustomerRouter);
+app.use("/articles", articleRoutes);
+app.use("/catalogs", catalogRoutes);
+app.use("/feedbacks", feedbackRoute);
+app.use("/cart", keranjangrouter);
+app.use("/portofolio", PortofolioRouter);
 
 // ========================================
 // ERROR HANDLERS
 // ========================================
 
-// 404 Handler
+// 404 Handler - Must be after all routes
 app.use((req, res, next) => {
-  const error = new Error(`Not Found - ${req.originalUrl}`);
-  res.status(404);
-  next(error);
+  next(new AppError(`Route ${req.originalUrl} tidak ditemukan`, 404));
 });
 
-// Global Error Handler
-app.use((err, req, res, next) => {
-  const statusCode = res.statusCode === 200 ? 500 : res.statusCode;
-  res.status(statusCode).json({
-    success: false,
-    message: err.message,
-    stack: process.env.NODE_ENV === "production" ? null : err.stack,
-  });
-});
+// Global Error Handler - Must be last
+app.use(errorHandler);
 
 export default app;

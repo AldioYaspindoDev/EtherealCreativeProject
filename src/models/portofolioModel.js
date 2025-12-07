@@ -13,7 +13,7 @@ const portofolioSchema = new mongoose.Schema(
       trim: true,
       default: null,
     },
-    // 2. 🚀 Tambahkan field untuk Public ID Cloudinary
+    // 2. Tambahkan field untuk Public ID Cloudinary
     gambarPublicId: {
       type: String,
       trim: true,
