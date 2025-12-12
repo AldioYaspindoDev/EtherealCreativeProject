@@ -35,7 +35,7 @@ export const setAuthCookies = (res, accessToken, refreshToken, role) => {
   const cookieOptions = {
     httpOnly: true,
     secure: isProduction,
-    sameSite: 'strict', // ✅ Protection against CSRF
+    sameSite: 'none', // ✅ Protection against CSRF
     path: '/',
   };
 

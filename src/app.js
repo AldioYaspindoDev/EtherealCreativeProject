@@ -66,10 +66,7 @@ const FRONTEND_URL = process.env.CLIENT_URL || "http://localhost:3000";
 // Build allowed origins list
 const allowedOrigins = [
   'http://localhost:3000',
-  'http://localhost:5173', // Vite
-  'http://localhost:3001', // Alternative port
   'http://127.0.0.1:3000',
-  'http://127.0.0.1:5173',
   FRONTEND_URL,
 ].filter((origin, index, self) => self.indexOf(origin) === index);
 
@@ -77,16 +74,16 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (Postman, mobile apps, etc.)
     if (!origin) {
-      console.log('✅ CORS: No origin (Postman/Mobile) - ALLOWED');
+      console.log('CORS: No origin (Postman/Mobile) - ALLOWED');
       return callback(null, true);
     }
 
     if (allowedOrigins.includes(origin)) {
-      console.log(`✅ CORS: ${origin} - ALLOWED`);
+      console.log(`CORS: ${origin} - ALLOWED`);
       callback(null, true);
     } else {
-      console.warn(`❌ CORS: ${origin} - BLOCKED`);
-      console.warn(`   Allowed: ${allowedOrigins.join(', ')}`);
+      console.warn(`CORS: ${origin} - BLOCKED`);
+      console.warn(`Allowed: ${allowedOrigins.join(', ')}`);
       callback(new Error(`Not allowed by CORS: ${origin}`));
     }
   },
