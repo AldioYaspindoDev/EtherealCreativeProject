@@ -172,6 +172,31 @@ const catalogController = {
     }
   },
 
+  // Search Catalog 
+  async searchCatalog(req,res){
+    try {
+      const {q} = req.query;
+
+      if(!q) {
+        return res.status(404).json({
+          success: false,
+          message: "data harus diisi"
+        });
+      };
+
+      const catalogs = await Catalog.find({
+        productName: { $regex: q, $options: "i" },
+      });
+
+      res.json(catalogs);
+    } catch (error) {
+      res.status(500).json({
+        success: false,
+        message: error.message,
+      });
+    }
+  },
+
   // UPDATE
   async updateCatalog(req, res) {
     try {

@@ -112,7 +112,8 @@ const optionalUpload = (req, res, next) => {
 
 // GET all catalogs (with optional filters)
 catalogRoutes.get("/", catalogController.getAllCatalog);
-
+// GET search catalogs
+catalogRoutes.get("/search", catalogController.searchCatalog);
 // GET catalog by ID`
 catalogRoutes.get("/:id", catalogController.getCatalogById);
 
@@ -123,6 +124,7 @@ catalogRoutes.post(
   upload.array("images", 10), // PENTING: "images" dan array()
   catalogController.createCatalog
 );
+
 
 // UPDATE: Support multiple images upload
 catalogRoutes.patch(
