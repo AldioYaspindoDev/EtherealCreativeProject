@@ -6,6 +6,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FaWhatsapp } from "react-icons/fa";
 import toast from "react-hot-toast";
+import { useCart } from "@/context/CartContext";
 
 export default function CartPage() {
   const [userId, setUserId] = useState(null);
@@ -13,6 +14,7 @@ export default function CartPage() {
   const [selectedItems, setSelectedItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const router = useRouter();
+  const { refreshCart } = useCart();
 
   // Ambil user yang login dari cookie token
   useEffect(() => {
@@ -105,6 +107,7 @@ export default function CartPage() {
       );
 
       setCart(res.data.cart);
+      refreshCart();
     } catch (err) {
       console.error("Error updating quantity:", err);
       toast.error("Gagal mengubah jumlah produk", {
@@ -132,6 +135,7 @@ export default function CartPage() {
       );
 
       setCart(res.data.cart);
+      refreshCart();
       setSelectedItems((prev) => prev.filter((id) => id !== itemId));
 
       toast.success("Produk dihapus dari keranjang", {
@@ -387,7 +391,7 @@ export default function CartPage() {
                     className="w-4 h-4 sm:w-5 sm:h-5 cursor-pointer accent-blue-900"
                   />
                   <label
-                    className="text-sm sm:text-base font-medium cursor-pointer select-none"
+                    className="text-sm sm:text-base font-medium cursor-pointer select-none text-gray-500"
                     onClick={toggleSelectAll}
                   >
                     Pilih Semua
@@ -464,9 +468,7 @@ export default function CartPage() {
                               )}
                               {item.size && (
                                 <span className="flex items-center gap-1">
-                                  <span className="text-gray-500">
-                                    Ukuran:
-                                  </span>
+                                  <span className="text-gray-500">Ukuran:</span>
                                   <span className="font-medium">
                                     {item.size}
                                   </span>
@@ -486,24 +488,24 @@ export default function CartPage() {
                           {/* Quantity Controls & Actions - Mobile: Horizontal, Desktop: Better spacing */}
                           <div className="flex items-center justify-between gap-2 sm:gap-3">
                             {/* Quantity Controls */}
-                            <div className="flex items-center gap-1 sm:gap-2 border border-gray-300 rounded-lg">
+                            <div className="flex items-center gap-1 sm:gap-2 border border-blue-900 rounded-lg">
                               <button
                                 onClick={() =>
                                   updateQuantity(item._id, item.quantity - 1)
                                 }
                                 disabled={item.quantity <= 1}
-                                className="px-2 sm:px-3 py-1 sm:py-1.5 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-base sm:text-lg transition-colors"
+                                className="px-2 sm:px-3 py-1 sm:py-1.5 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-base text-blue-900 sm:text-lg transition-colors"
                               >
                                 −
                               </button>
-                              <span className="px-2 sm:px-3 py-1 min-w-[32px] sm:min-w-[40px] text-center font-medium text-sm sm:text-base">
+                              <span className="px-2 sm:px-3 py-1 min-w-[32px] sm:min-w-[40px] text-center font-medium text-sm sm:text-base text-blue-900">
                                 {item.quantity}
                               </span>
                               <button
                                 onClick={() =>
                                   updateQuantity(item._id, item.quantity + 1)
                                 }
-                                className="px-2 sm:px-3 py-1 sm:py-1.5 hover:bg-gray-100 font-bold text-base sm:text-lg transition-colors"
+                                className="px-2 sm:px-3 py-1 sm:py-1.5 hover:bg-gray-100 font-bold text-base text-blue-900 sm:text-lg transition-colors"
                               >
                                 +
                               </button>
@@ -582,10 +584,8 @@ export default function CartPage() {
                   </div>
 
                   <p className="text-xs text-gray-500 text-center">
-                    Dengan melanjutkan, Anda menyetujui{" "}
-                    <Link href="#" className="text-blue-900 hover:underline">
-                      Syarat & Ketentuan
-                    </Link>
+                    Pesan akan lansung terkirim menuju WhatsApp admin setelah klik pesan
+                    sekarang, terima kasih 
                   </p>
                 </div>
               </div>

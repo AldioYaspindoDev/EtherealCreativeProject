@@ -16,11 +16,13 @@ import { FaWhatsapp } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { addToCart } from "./addToCartApi";
 import { useRouter } from "next/navigation";
+import { useCart } from "@/context/CartContext";
 
 export default function ProductDetail({ params }) {
   const unwrappedParams = use(params);
   const router = useRouter();
-  
+  const { refreshCart } = useCart();
+
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState(false);
@@ -67,13 +69,14 @@ export default function ProductDetail({ params }) {
 
     try {
       setAddingToCart(true);
-      
+
       // Kirim data lengkap termasuk warna, ukuran, dan quantity
       const data = await addToCart(product._id, quantity, {
         color: selectedColor,
         size: selectedSize,
       });
-      
+      refreshCart();
+
       toast.success(`${product.productName} ditambahkan ke keranjang!`, {
         duration: 3000,
         position: "bottom-center",

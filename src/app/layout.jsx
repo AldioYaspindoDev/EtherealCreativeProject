@@ -3,6 +3,7 @@ import "./globals.css";
 import "../styles/animations.css";
 import { Poppins } from "next/font/google";
 import { Toaster } from "react-hot-toast";
+import { CartProvider } from "../context/CartContext";
 
 const poppins = Poppins({
   subsets: ["latin"],
@@ -31,7 +32,7 @@ export default function RootLayout({ children }) {
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        {children}
+        <CartProvider>{children}</CartProvider>
         <Toaster />
       </body>
     </html>
