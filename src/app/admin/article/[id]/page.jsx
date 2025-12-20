@@ -15,7 +15,7 @@ export default function UpdateArticlePage() {
   const [submitLoading, setSubmitLoading] = useState(false);
 
   useEffect(() => {
-    if (!id) return; 
+    if (!id) return;
 
     const fetchArticle = async () => {
       setPageLoading(true);
@@ -25,33 +25,32 @@ export default function UpdateArticlePage() {
         );
         const data = res.data.data;
         setInitialData(data);
-
       } catch (err) {
         console.error("Gagal mengambil data:", err);
         toast.error("Gagal mengambil data artikel.", {
-        duration: 4000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "16px 20px",
-          borderRadius: "16px",
-          boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-          border: "2px solid rgba(255, 255, 255, 0.2)",
-          minWidth: "320px",
-        },
-      });
-        router.push("/admin/article"); 
+          duration: 4000,
+          position: "bottom-center",
+          style: {
+            background: "#ffffff",
+            color: "black",
+            padding: "16px 20px",
+            borderRadius: "16px",
+            boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
+            border: "2px solid rgba(255, 255, 255, 0.2)",
+            minWidth: "320px",
+          },
+        });
+        router.push("/admin/article");
       } finally {
         setPageLoading(false);
       }
     };
 
     fetchArticle();
-  }, [id, router]); 
+  }, [id, router]);
 
   const handleSubmit = async (formData) => {
-    setSubmitLoading(true); 
+    setSubmitLoading(true);
     try {
       const response = await axios.put(
         `${process.env.NEXT_PUBLIC_API_URL}/articles/${id}`,
@@ -60,68 +59,71 @@ export default function UpdateArticlePage() {
 
       if (response.status === 200) {
         toast.success("Artikel berhasil diupdate!", {
-        duration: 3000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "12px 24px",
-          borderRadius: "999px",
-          fontSize: "14px",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-        },
-      });
+          duration: 3000,
+          position: "bottom-center",
+          style: {
+            background: "#ffffff",
+            color: "black",
+            padding: "12px 24px",
+            borderRadius: "999px",
+            fontSize: "14px",
+            boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
+          },
+        });
         router.push("/admin/article");
       }
     } catch (error) {
       console.error("Error lengkap:", error);
       if (error.response) {
-        toast.error(`Error ${error.response.status}: ${
+        toast.error(
+          `Error ${error.response.status}: ${
             error.response.data?.message || "Gagal mengubah artikel"
-          }`, {
-        duration: 4000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "16px 20px",
-          borderRadius: "16px",
-          boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-          border: "2px solid rgba(255, 255, 255, 0.2)",
-          minWidth: "320px",
-        },
-      });
+          }`,
+          {
+            duration: 4000,
+            position: "bottom-center",
+            style: {
+              background: "#ffffff",
+              color: "black",
+              padding: "16px 20px",
+              borderRadius: "16px",
+              boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
+              border: "2px solid rgba(255, 255, 255, 0.2)",
+              minWidth: "320px",
+            },
+          }
+        );
       } else if (error.request) {
         toast.error("Tidak dapat terhubung ke server.", {
-        duration: 4000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "16px 20px",
-          borderRadius: "16px",
-          boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-          border: "2px solid rgba(255, 255, 255, 0.2)",
-          minWidth: "320px",
-        },
-      });
+          duration: 4000,
+          position: "bottom-center",
+          style: {
+            background: "#ffffff",
+            color: "black",
+            padding: "16px 20px",
+            borderRadius: "16px",
+            boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
+            border: "2px solid rgba(255, 255, 255, 0.2)",
+            minWidth: "320px",
+          },
+        });
       } else {
         toast.error(`Error: ${error.message}`, {
-        duration: 4000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "16px 20px",
-          borderRadius: "16px",
-          boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-          border: "2px solid rgba(255, 255, 255, 0.2)",
-          minWidth: "320px",
-        },
-      });
+          duration: 4000,
+          position: "bottom-center",
+          style: {
+            background: "#ffffff",
+            color: "black",
+            padding: "16px 20px",
+            borderRadius: "16px",
+            boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
+            border: "2px solid rgba(255, 255, 255, 0.2)",
+            minWidth: "320px",
+          },
+        });
       }
     } finally {
-      setSubmitLoading(false); 
+      setSubmitLoading(false);
     }
   };
 
@@ -134,7 +136,7 @@ export default function UpdateArticlePage() {
   }
 
   if (!initialData) {
-     return (
+    return (
       <div className="flex justify-center items-center min-h-screen text-black">
         Data artikel tidak ditemukan.
       </div>
@@ -142,11 +144,11 @@ export default function UpdateArticlePage() {
   }
 
   return (
-     <ArticleForm
+    <ArticleForm
       onSubmit={handleSubmit}
       initialData={initialData}
       loading={submitLoading}
-      pageTitle="UPDATE ARTIKEL"
+      pageTitle="Update Artikel"
       buttonText="Update Artikel"
     />
   );

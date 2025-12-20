@@ -4,14 +4,27 @@ import { useState, useEffect } from "react";
 import axios from "axios";
 import Link from "next/link";
 import Cookies from "js-cookie";
+import {
+  Users,
+  ShoppingBag,
+  FileText,
+  MessageSquare,
+  Image as ImageIcon,
+  UserCheck,
+  RefreshCw,
+  LayoutDashboard as DashboardIcon,
+} from "lucide-react";
 
 export default function LayoutDashboard() {
   const [stats, setStats] = useState({
-    totalUsers: 0,
-    currentUser: "Loading...",
-    totalArticles: 0,
+    totalAdmins: 0,
+    totalCustomers: 0,
     totalCatalogs: 0,
+    totalPortfolios: 0,
+    totalOrders: 0, // Belum difilter statusnya, ambil total semua
+    totalArticles: 0,
     totalFeedbacks: 0,
+    currentUser: "Loading...",
   });
   const [loading, setLoading] = useState(true);
 
@@ -22,25 +35,35 @@ export default function LayoutDashboard() {
   const fetchAllData = async () => {
     try {
       setLoading(true);
+      const token = Cookies.get("adminToken");
 
-      // Ambil token dari localStorage atau cookie
-      const token = localStorage.getItem("adminToken") || "";
-
-      // Fetch semua data secara paralel
-      const [usersRes, catalogsRes, articlesRes, feedbacksRes] =
-        await Promise.all([
-          fetchUsers(token),
-          fetchCatalogs(),
-          fetchArticles(),
-          fetchFeedbacks(),
-        ]);
+      const [
+        adminsRes,
+        customersRes,
+        catalogsRes,
+        portfoliosRes,
+        ordersRes,
+        articlesRes,
+        feedbacksRes,
+      ] = await Promise.all([
+        fetchAdmins(token),
+        fetchCustomers(token),
+        fetchCatalogs(),
+        fetchPortfolios(),
+        fetchOrders(),
+        fetchArticles(),
+        fetchFeedbacks(),
+      ]);
 
       setStats({
-        totalUsers: usersRes.length,
-        currentUser: getCurrentUserRole(token), // Fungsi untuk mendapatkan role user saat ini
-        totalArticles: articlesRes.length,
+        totalAdmins: adminsRes.length,
+        totalCustomers: customersRes.length,
         totalCatalogs: catalogsRes.length,
+        totalPortfolios: portfoliosRes.length,
+        totalOrders: ordersRes.length,
+        totalArticles: articlesRes.length,
         totalFeedbacks: feedbacksRes.length,
+        currentUser: getCurrentUserRole(token),
       });
     } catch (error) {
       console.error("Error fetching dashboard data:", error);
@@ -49,68 +72,97 @@ export default function LayoutDashboard() {
     }
   };
 
-  const fetchUsers = async () => {
+  const fetchAdmins = async (token) => {
     try {
-      // 1. Ambil token secara manual dari cookie
-      const token = Cookies.get("adminToken");
-
       const res = await axios.get(
-        // Pastikan URL di sini benar, harus mencakup port 5000
-        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/`, // Asumsi endpoint ini mengembalikan user
-        {
-          headers: {
-            // 2. Tambahkan token ke Header Otorisasi
-            Authorization: `Bearer ${token}`,
-          },
-          withCredentials: true,
-        }
-      ); // Periksa: Jika res.data adalah array user
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/`,
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
       return res.data.data || [];
     } catch (error) {
-      console.error("ERROR FETCH USERS:", error);
+      console.error("Fetch Admins Error:", error);
+      return [];
+    }
+  };
+
+  const fetchCustomers = async (token) => {
+    try {
+      const res = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/admin/customer/`,
+        { headers: { Authorization: `Bearer ${token}` }, withCredentials: true }
+      );
+      return res.data.data || [];
+    } catch (error) {
+      console.error("Fetch Customers Error:", error);
       return [];
     }
   };
 
   const fetchCatalogs = async () => {
     try {
-      // Pastikan menggunakan NEXT_PUBLIC_API_URL
-      const response = await axios.get(
+      const res = await axios.get(
         `${process.env.NEXT_PUBLIC_API_URL}/catalogs`,
-        { withCredentials: true }
+        {
+          withCredentials: true,
+        }
       );
-      return response.data.data || [];
+      return res.data.data || [];
     } catch (error) {
-      console.error("ERROR FETCH CATALOGS:", error);
+      return [];
+    }
+  };
+
+  const fetchPortfolios = async () => {
+    try {
+      const res = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/portofolio`,
+        {
+          withCredentials: true,
+        }
+      );
+      return Array.isArray(res.data.data) ? res.data.data : [];
+    } catch (error) {
+      return [];
+    }
+  };
+
+  const fetchOrders = async () => {
+    try {
+      const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/orders`, {
+        withCredentials: true,
+      });
+      // Assuming response structure similar to others, or direct array
+      // OrderTable uses res.data.data usually.
+      return res.data.data || [];
+    } catch (error) {
       return [];
     }
   };
 
   const fetchArticles = async () => {
     try {
-      // Pastikan menggunakan NEXT_PUBLIC_API_URL
-      const response = await axios.get(
+      const res = await axios.get(
         `${process.env.NEXT_PUBLIC_API_URL}/articles`,
-        { withCredentials: true }
+        {
+          withCredentials: true,
+        }
       );
-      return response.data.data || [];
+      return res.data.data || [];
     } catch (error) {
-      console.error("ERROR FETCH ARTICLES:", error);
       return [];
     }
   };
 
   const fetchFeedbacks = async () => {
     try {
-      // Pastikan menggunakan NEXT_PUBLIC_API_URL
-      const response = await axios.get(
+      const res = await axios.get(
         `${process.env.NEXT_PUBLIC_API_URL}/feedbacks`,
-        { withCredentials: true }
+        {
+          withCredentials: true,
+        }
       );
-
-      return response.data.data || [];
+      return res.data.data || [];
     } catch (error) {
-      console.error("ERROR FETCH FEEDBACKS:", error);
       return [];
     }
   };
@@ -118,7 +170,6 @@ export default function LayoutDashboard() {
   const getCurrentUserRole = (token) => {
     try {
       if (!token) return "Guest";
-      // Decode JWT token untuk mendapatkan role user
       const payload = JSON.parse(atob(token.split(".")[1]));
       return payload.role || "User";
     } catch (error) {
@@ -126,98 +177,136 @@ export default function LayoutDashboard() {
     }
   };
 
+  const menuItems = [
+    {
+      title: "User Admin",
+      count: stats.totalAdmins,
+      icon: <UserCheck className="w-8 h-8 text-blue-600" />,
+      color: "bg-blue-50",
+      link: "/admin/user",
+      label: "Administrator terdaftar",
+    },
+    {
+      title: "User Customer",
+      count: stats.totalCustomers,
+      icon: <Users className="w-8 h-8 text-indigo-600" />,
+      color: "bg-indigo-50",
+      link: "/admin/userCustomer",
+      label: "Pelanggan terdaftar",
+    },
+    {
+      title: "Katalog Produk",
+      count: stats.totalCatalogs,
+      icon: <ShoppingBag className="w-8 h-8 text-orange-600" />,
+      color: "bg-orange-50",
+      link: "/admin/catalog",
+      label: "Item dalam katalog",
+    },
+    {
+      title: "Order Masuk",
+      count: stats.totalOrders,
+      icon: <div className="text-emerald-600 font-bold text-xl">🛒</div>, // Fallback if icon issue, but using emoji/icon mixed ok.
+      // Better use Lucide:
+      icon: <ShoppingBag className="w-8 h-8 text-emerald-600" />,
+      color: "bg-emerald-50",
+      link: "/admin/order",
+      label: "Total transaksi pemesanan",
+    },
+    {
+      title: "Portofolio",
+      count: stats.totalPortfolios,
+      icon: <ImageIcon className="w-8 h-8 text-pink-600" />,
+      color: "bg-pink-50",
+      link: "/admin/portofolio",
+      label: "Karya/Project ditampilkan",
+    },
+    {
+      title: "Artikel Blog",
+      count: stats.totalArticles,
+      icon: <FileText className="w-8 h-8 text-cyan-600" />,
+      color: "bg-cyan-50",
+      link: "/admin/article",
+      label: "Artikel dipublikasikan",
+    },
+    {
+      title: "Feedback",
+      count: stats.totalFeedbacks,
+      icon: <MessageSquare className="w-8 h-8 text-violet-600" />,
+      color: "bg-violet-50",
+      link: "/admin/about",
+      label: "Ulasan pengguna diterima",
+    },
+  ];
+
   return (
-    <div className="w-full min-h-screenp-8">
-      <div className="max-w-7xl mx-auto">
-        <h1 className="text-5xl font-semibold font-['Poppins'] text-neutral-900 mb-12">
-          Dashboard Admin
-        </h1>
-
-        {loading ? (
-          <div className="flex justify-center items-center h-64">
-            <p className="text-2xl text-gray-500">Loading data...</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-            {/* Card User */}
-            <div className="bg-blue-700 rounded-3xl p-8 text-white">
-              <h2 className="text-4xl font-semibold font-['Poppins'] mb-6">
-                User
-              </h2>
-              <p className="text-2xl font-medium font-['Poppins'] mb-3">
-                User Saat Ini: {stats.currentUser}
-              </p>
-              <p className="text-2xl font-medium font-['Poppins'] mb-6">
-                Jumlah User: {stats.totalUsers}
-              </p>
-              <Link
-                href="/admin/user"
-                className="text-black text-base font-normal font-['Poppins'] underline inline-block mt-4"
-              >
-                Kelola User
-              </Link>
-            </div>
-
-            {/* Card Katalog */}
-            <div className="bg-orange-600 rounded-3xl p-8 text-white">
-              <h2 className="text-4xl font-semibold font-['Poppins'] mb-6">
-                Katalog
-              </h2>
-              <p className="text-2xl font-medium font-['Poppins'] mb-6">
-                Jumlah Katalog Saat ini: {stats.totalCatalogs}
-              </p>
-              <Link
-                href="/admin/catalog"
-                className="text-black text-base font-normal font-['Poppins'] underline inline-block mt-4"
-              >
-                Kelola Katalog
-              </Link>
-            </div>
-
-            {/* Card Artikel */}
-            <div className="bg-green-400 rounded-3xl p-8 text-white">
-              <h2 className="text-4xl font-semibold font-['Poppins'] mb-6">
-                Artikel
-              </h2>
-              <p className="text-2xl font-medium font-['Poppins'] mb-6">
-                Jumlah Artikel Saat ini: {stats.totalArticles}
-              </p>
-              <Link
-                href="/admin/article"
-                className="text-black text-base font-normal font-['Poppins'] underline inline-block mt-4"
-              >
-                Kelola Artikel
-              </Link>
-            </div>
-
-            {/* Card Feedback */}
-            <div className="bg-purple-600 rounded-3xl p-8 text-white">
-              <h2 className="text-4xl font-semibold font-['Poppins'] mb-6">
-                Feedback
-              </h2>
-              <p className="text-2xl font-medium font-['Poppins'] mb-6">
-                Jumlah Feedback Saat ini: {stats.totalFeedbacks}
-              </p>
-              <Link
-                href="/admin/about"
-                className="text-black text-base font-normal font-['Poppins'] underline inline-block mt-4"
-              >
-                Kelola Feedback
-              </Link>
-            </div>
-          </div>
-        )}
-
-        {/* Button Refresh */}
-        <div className="mt-8 text-center">
-          <button
-            onClick={fetchAllData}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors"
-          >
-            Refresh Data
-          </button>
+    <div className="space-y-8">
+      {/* Welcome Header */}
+      <div className="bg-gradient-to-r from-neutral-900 to-neutral-800 rounded-2xl p-8 text-white shadow-lg relative overflow-hidden">
+        <div className="relative z-10">
+          <h1 className="text-3xl font-bold mb-2">
+            Selamat Datang di Dashboard, {stats.currentUser}!
+          </h1>
+          <p className="text-neutral-300 max-w-2xl">
+            Pantau dan kelola seluruh aktivitas website Ethereal Creative dari
+            panel ini.
+          </p>
         </div>
+        {/* Decorative Circle */}
+        <div className="absolute -right-10 -top-10 w-64 h-64 bg-white/5 rounded-full blur-3xl" />
+        <div className="absolute -left-10 -bottom-10 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl" />
       </div>
+
+      {/* Control Bar */}
+      <div className="flex justify-between items-center">
+        <div className="flex items-center gap-2 text-gray-800">
+          <DashboardIcon className="w-5 h-5" />
+          <h2 className="text-xl font-bold">Ringkasan Statistik</h2>
+        </div>
+        <button
+          onClick={fetchAllData}
+          disabled={loading}
+          className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm text-sm font-medium"
+        >
+          <RefreshCw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} />
+          Refresh Data
+        </button>
+      </div>
+
+      {loading ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <div
+              key={i}
+              className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-32 animate-pulse"
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {menuItems.map((item, index) => (
+            <Link
+              href={item.link}
+              key={index}
+              className="bg-white p-6 rounded-xl shadow-sm border border-gray-100 hover:shadow-md hover:border-blue-200 transition-all group"
+            >
+              <div className="flex justify-between items-start mb-4">
+                <div
+                  className={`p-3 rounded-xl ${item.color} group-hover:scale-110 transition-transform`}
+                >
+                  {item.icon}
+                </div>
+                <div className="text-3xl font-bold text-gray-800">
+                  {item.count}
+                </div>
+              </div>
+              <div>
+                <h3 className="font-bold text-gray-800 mb-1">{item.title}</h3>
+                <p className="text-xs text-gray-500">{item.label}</p>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

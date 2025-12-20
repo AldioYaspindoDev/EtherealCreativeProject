@@ -138,7 +138,7 @@ export default function UpdateCatalogPage() {
       onSubmit={handleSubmit}
       initialData={initialData}
       loading={submitLoading}
-      pageTitle="Update Catalog"
+      pageTitle="Edit Produk"
       buttonText="Update Catalog"
     />
   );

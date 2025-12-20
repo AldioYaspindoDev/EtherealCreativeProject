@@ -14,7 +14,7 @@ import CatalogSection from "../CatalogSection";
 import Link from "next/link";
 import { FaWhatsapp } from "react-icons/fa";
 import toast from "react-hot-toast";
-import { addToCart } from "./addToCartApi";
+import { addToCart, createOrder } from "./addToCartApi";
 import { useRouter } from "next/navigation";
 import { useCart } from "@/context/CartContext";
 
@@ -31,6 +31,7 @@ export default function ProductDetail({ params }) {
   const [selectedSize, setSelectedSize] = useState("");
   const [quantity, setQuantity] = useState(1);
   const [scrollPosition, setScrollPosition] = useState(0);
+  const [isOrdering, setIsOrdering] = useState(false);
 
   // Fetch product data
   useEffect(() => {
@@ -185,7 +186,7 @@ export default function ProductDetail({ params }) {
     }).format(price);
   };
 
-  const handleWhatsAppOrder = () => {
+  const handleWhatsAppOrder = async () => {
     if (!selectedColor || !selectedSize) {
       toast.error("Silakan pilih warna dan ukuran terlebih dahulu", {
         duration: 3000,
@@ -194,7 +195,18 @@ export default function ProductDetail({ params }) {
       return;
     }
 
-    const message = `Halo, saya ingin memesan:
+    try {
+      setIsOrdering(true);
+
+      // Create order in database first
+      await createOrder(product._id, quantity, {
+        color: selectedColor,
+        size: selectedSize,
+        customerName: "WhatsApp Guest", // Placeholder guest data
+        customerPhone: "-", // Placeholder guest data
+      });
+
+      const message = `Halo, saya ingin memesan:
 
 *${product.productName}*
 - Warna: ${selectedColor}
@@ -205,10 +217,43 @@ export default function ProductDetail({ params }) {
 
 Apakah produk ini masih tersedia?`;
 
-    const whatsappUrl = `https://wa.me/62895415019150?text=${encodeURIComponent(
-      message
-    )}`;
-    window.open(whatsappUrl, "_blank");
+      const whatsappUrl = `https://wa.me/62895415019150?text=${encodeURIComponent(
+        message
+      )}`;
+      window.open(whatsappUrl, "_blank");
+    } catch (err) {
+      console.error("Error creating order:", err);
+
+      if (err.response?.data?.requireAuth) {
+        toast.error("Silakan login terlebih dahulu", {
+          duration: 4000,
+          position: "bottom-center",
+          style: {
+            background: "#ffffff",
+            color: "black",
+            padding: "16px 20px",
+            borderRadius: "16px",
+            boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
+            border: "2px solid rgba(255, 255, 255, 0.2)",
+            minWidth: "320px",
+          },
+        });
+        setTimeout(() => router.push("/login"), 1000);
+        return;
+      }
+
+      toast.error(
+        `Gagal memproses pesanan: ${
+          err.response?.data?.message || err.message
+        }`,
+        {
+          duration: 4000,
+          position: "bottom-center",
+        }
+      );
+    } finally {
+      setIsOrdering(false);
+    }
   };
 
   if (loading) {
@@ -439,10 +484,14 @@ Apakah produk ini masih tersedia?`;
 
                   <button
                     onClick={handleWhatsAppOrder}
-                    disabled={!selectedColor || !selectedSize}
+                    disabled={!selectedColor || !selectedSize || isOrdering}
                     className="w-full bg-blue-900 hover:bg-blue-800 text-white font-bold py-4 px-6 rounded-xl flex items-center justify-center gap-3 transition-colors shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <FaWhatsapp className="w-6 h-6" />
+                    {isOrdering ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                    ) : (
+                      <FaWhatsapp className="w-6 h-6" />
+                    )}
                     Pesan via WhatsApp
                   </button>
                 </div>

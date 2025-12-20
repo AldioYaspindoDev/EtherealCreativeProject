@@ -1,116 +1,131 @@
-// File: PortofolioTable.jsx
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import axios from "axios";
 import Link from "next/link";
-import { FaRetweet, FaRegTrashAlt } from "react-icons/fa";
+import { Search, Pencil, Trash2, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 import Image from "next/image";
 
 export default function PortofolioTable({ initialPortofolios }) {
-  const [portofolios, setPortofolios] = useState(initialPortofolios); // Variabel state yang benar
-  const truncateText = (text, maxLength) => {
-    if (!text) return "";
-    if (text.length <= maxLength) return text;
-    return text.substring(0, maxLength) + "...";
-  };
+  const [portofolios, setPortofolios] = useState(initialPortofolios);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const handleDelete = async (id) => {
-    const confirmDelete = confirm("Yakin ingin menghapus Portofolio ini ?");
-    if (!confirmDelete) return;
+    if (!confirm("Yakin ingin menghapus Portofolio ini?")) return;
 
     try {
       await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/portofolio/${id}`);
 
-      // PERBAIKAN: setCatalogs -> setPortofolios
       setPortofolios((prev) => prev.filter((item) => item._id !== id));
-      toast.success("Berhasil Menghapus Portofolio", {
-        duration: 3000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "12px 24px",
-          borderRadius: "999px",
-          fontSize: "14px",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-        },
-      });
+      toast.success("Berhasil menghapus portofolio");
     } catch (error) {
       console.error(error);
-      toast.error("Terjadi Kesalahan Saat menghapus Portofolio", {
-        duration: 4000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "16px 20px",
-          borderRadius: "16px",
-          boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-          border: "2px solid rgba(255, 255, 255, 0.2)",
-          minWidth: "320px",
-        },
-      });
+      toast.error("Gagal menghapus portofolio");
     }
   };
 
+  const filteredPortofolios = portofolios.filter((item) =>
+    item.keterangan?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <>
-      {/* Desktop Table View */}
-      <div className="hidden md:block w-full overflow-x-auto">
-        <table className="w-full border-collapse bg-white shadow-md rounded-lg overflow-hidden">
-          <thead className="bg-neutral-800 text-white">
-            <tr>
-              <th className="px-4 py-3 text-left font-poppins">No</th>
-              <th className="px-4 py-3 text-left font-poppins">Deskripsi</th>
-              <th className="px-4 py-3 text-left font-poppins">Gambar</th>
-              <th className="px-6 py-3 text-center font-poppins">Aksi</th>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Daftar Portofolio</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Kelola galeri karya portofolio Anda
+          </p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Cari Portofolio..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-full md:w-64"
+            />
+          </div>
+          <Link
+            href="/admin/portofolio/createdPortofolio"
+            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Tambah Portofolio
+          </Link>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">
+                No
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Gambar
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Deskripsi
+              </th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Aksi
+              </th>
             </tr>
           </thead>
-          <tbody>
-            {portofolios.length === 0 ? ( // Sudah benar menggunakan portofolios
+          <tbody className="divide-y divide-gray-50">
+            {filteredPortofolios.length === 0 ? (
               <tr>
-                <td colSpan="9" className="px-4 py-8 text-center text-black">
-                  {/* PERBAIKAN: catalogs -> portofolio */}
-                  Tidak ada data portofolio
+                <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
+                  Tidak ada portofolio ditemukan.
                 </td>
               </tr>
             ) : (
-              portofolios.map((portofolio, index) => (
+              filteredPortofolios.map((portofolio, index) => (
                 <tr
                   key={portofolio._id}
-                  className="text-black border-b border-neutral-200 hover:bg-neutral-50"
+                  className="hover:bg-blue-50/30 transition-colors group"
                 >
-                  <td className="px-4 py-3">{index + 1}</td>
-                  <td className="px-4 py-3 font-medium">
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {index + 1}
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="w-20 h-20 rounded-lg overflow-hidden bg-gray-100 border border-gray-200 relative">
+                      <Image
+                        src={portofolio.gambar}
+                        alt={portofolio.keterangan || "Portofolio"}
+                        fill
+                        className="object-cover"
+                        onError={(e) => {
+                          e.target.style.display = "none"; // Hide if error
+                        }}
+                      />
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 font-medium text-gray-900">
                     {portofolio.keterangan}
                   </td>
-                  <td className="px-4 py-3">
-                    <Image
-                      src={portofolio.gambar}
-                      alt={portofolio.keterangan}
-                      className="w-32 h-32 object-cover rounded-lg border border-neutral-300"
-                      height={500}
-                      width={500}
-                      onError={(e) => {
-                        e.target.src =
-                          "https://placehold.co/128x128/f1f5f9/64748b?text=Error";
-                      }}
-                    />
-                  </td>
-                  <td className="px-6 py-3 text-center">
-                    <div className="flex items-center justify-center gap-3">
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
                       <Link
                         href={`/admin/portofolio/${portofolio._id}`}
-                        className="flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                        className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                        title="Edit"
                       >
-                        <FaRetweet />
+                        <Pencil className="w-4 h-4" />
                       </Link>
                       <button
                         onClick={() => handleDelete(portofolio._id)}
-                        className="flex items-center justify-center w-9 h-9 bg-red-600 text-white rounded hover:bg-red-700 transition"
+                        className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                        title="Hapus"
                       >
-                        <FaRegTrashAlt />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -121,70 +136,12 @@ export default function PortofolioTable({ initialPortofolios }) {
         </table>
       </div>
 
-      {/* Mobile Card View */}
-      <div className="md:hidden space-y-4">
-        {/* PERBAIKAN: catalogs -> portofolios */}
-        {portofolios.length === 0 ? (
-          <div className="bg-white shadow-md rounded-lg p-8 text-center text-black">
-            Tidak ada data portofolio
-          </div>
-        ) : (
-          portofolios.map(
-            (
-              portofolio,
-              index // Sudah benar menggunakan portofolios.map
-            ) => (
-              <div
-                key={portofolio._id}
-                className="bg-white shadow-md rounded-lg p-4 space-y-3"
-              >
-                {/* Image - Tidak ada perubahan */}
-                <Image
-                  src={portofolio.gambar}
-                  alt={portofolio.keterangan}
-                  width={500}
-                  height={500}
-                  className="w-full h-48 object-cover rounded-lg border border-neutral-300"
-                  onError={(e) => {
-                    e.target.src =
-                      "https://placehold.co/128x128/f1f5f9/64748b?text=Error";
-                  }}
-                />
-
-                {/* Info - Tidak ada perubahan */}
-                <div className="space-y-2 text-black">
-                  <div className="flex justify-between items-start">
-                    <h3 className="font-bold text-lg">
-                      {portofolio.keterangan}
-                    </h3>
-                    <span className="text-sm text-neutral-600">
-                      #{index + 1}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Actions - Tidak ada perubahan */}
-                <div className="flex gap-3 pt-2">
-                  <Link
-                    href={`/admin/portofolio/${portofolio._id}`}
-                    className="flex-1 flex items-center justify-center gap-2 bg-blue-600 text-white py-2 rounded hover:bg-blue-700 transition"
-                  >
-                    <FaRetweet />
-                    <span>Edit</span>
-                  </Link>
-                  <button
-                    onClick={() => handleDelete(portofolio._id)}
-                    className="flex-1 flex items-center justify-center gap-2 bg-red-600 text-white py-2 rounded hover:bg-red-700 transition"
-                  >
-                    <FaRegTrashAlt />
-                    <span>Hapus</span>
-                  </button>
-                </div>
-              </div>
-            )
-          )
-        )}
+      {/* Footer */}
+      <div className="px-6 py-4 border-t border-gray-100">
+        <span className="text-sm text-gray-500">
+          Total {filteredPortofolios.length} Portofolio
+        </span>
       </div>
-    </>
+    </div>
   );
 }

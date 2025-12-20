@@ -77,7 +77,7 @@ export default function CreateCatalogPage() {
     <CatalogForm
       onSubmit={handleSubmit}
       loading={loading}
-      pageTitle="Tambah Catalog"
+      pageTitle="Tambah Produk Baru"
       buttonText="Simpan Catalog"
     />
   );

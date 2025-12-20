@@ -3,123 +3,146 @@
 import { useState } from "react";
 import axios from "axios";
 import Link from "next/link";
-import { FaRegTrashAlt, FaRetweet } from "react-icons/fa";
+import { Search, Pencil, Trash2, Plus } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function ArticleTable({ initialArtikels = [] }) {
   const [artikels, setArtikels] = useState(initialArtikels);
+  const [searchTerm, setSearchTerm] = useState("");
 
   const formatDate = (dateString) => {
-    const options = { year: "numeric", month: "short", day: "numeric" };
+    const options = { year: "numeric", month: "long", day: "numeric" };
     return new Date(dateString).toLocaleDateString("id-ID", options);
   };
 
   const truncateText = (text, maxLength) => {
-    // 🔥 PERBAIKAN: Cek jika text adalah falsy (null, undefined, atau string kosong)
     if (!text) return "";
-
-    // Sekarang aman untuk menggunakan .length
     if (text.length <= maxLength) return text;
-
     return text.substring(0, maxLength) + "...";
   };
 
   const handleDelete = async (id) => {
-    const confirmDelete = confirm("yakin ingin menghapus artikel ini ?");
-    if (!confirmDelete) return;
+    if (!confirm("Yakin ingin menghapus artikel ini?")) return;
     try {
       await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/articles/${id}`);
-
       setArtikels((prev) => prev.filter((item) => item._id !== id));
-      toast.success("artikel berhasil dihapus", {
-        duration: 3000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "12px 24px",
-          borderRadius: "999px",
-          fontSize: "14px",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-        },
-      });
+      toast.success("Artikel berhasil dihapus");
     } catch (error) {
       console.error(error);
-      toast.error("terjadi kesalahan saat menghapus artikel", {
-        duration: 4000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "16px 20px",
-          borderRadius: "16px",
-          boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-          border: "2px solid rgba(255, 255, 255, 0.2)",
-          minWidth: "320px",
-        },
-      });
+      toast.error("Terjadi kesalahan saat menghapus artikel");
     }
   };
 
+  const filteredArtikels = artikels.filter(
+    (artikel) =>
+      artikel.JudulArtikel?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      artikel.IsiArtikel?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <>
-      {/* Desktop Table View */}
-      <div className="hidden md:block w-full overflow-x-auto">
-        <table className="w-full border-collapse bg-white shadow-md rounded-lg overflow-hidden">
-          <thead className="bg-neutral-800 text-white">
-            <tr>
-              <th className="px-4 py-3 text-left font-poppins">No</th>
-              <th className="px-4 py-3 text-left font-poppins">Judul</th>
-              <th className="px-4 py-3 text-left font-poppins">Isi</th>
-              <th className="px-4 py-3 text-left font-poppins">Gambar</th>
-              <th className="px-4 py-3 text-left font-poppins">Tanggal</th>
-              <th className="px-4 py-3 text-center font-poppins">Aksi</th>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Daftar Artikel</h2>
+          <p className="text-sm text-gray-500 mt-1">Kelola artikel blog Anda</p>
+        </div>
+
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input
+              type="text"
+              placeholder="Cari Artikel..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-full md:w-64"
+            />
+          </div>
+          <Link
+            href="/admin/article/createArticle"
+            className="flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors text-sm font-medium"
+          >
+            <Plus className="w-4 h-4" />
+            Tambah Artikel
+          </Link>
+        </div>
+      </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">
+                No
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Cover
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Judul & Isi
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Tanggal
+              </th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Aksi
+              </th>
             </tr>
           </thead>
-          <tbody>
-            {artikels.length === 0 ? (
+          <tbody className="divide-y divide-gray-50">
+            {filteredArtikels.length === 0 ? (
               <tr>
-                <td colSpan="6" className="px-4 py-8 text-center text-black">
-                  Tidak ada data artikel
+                <td colSpan="5" className="px-6 py-8 text-center text-gray-500">
+                  Tidak ada artikel ditemukan.
                 </td>
               </tr>
             ) : (
-              artikels.map((artikel, index) => (
+              filteredArtikels.map((artikel, index) => (
                 <tr
                   key={artikel._id}
-                  className="text-black border-b border-neutral-200 hover:bg-neutral-50"
+                  className="hover:bg-blue-50/30 transition-colors group"
                 >
-                  <td className="px-4 py-3">{index + 1}</td>
-                  <td className="px-4 py-3 font-medium">
-                    {artikel.JudulArtikel}
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {index + 1}
                   </td>
-                  <td className="px-4 py-3 text-sm text-black">
-                    {truncateText(artikel.IsiArtikel, 50)}
-                  </td>
-                  <td className="px-4 py-3">
+                  <td className="px-6 py-4">
                     <img
                       src={artikel.ImageUrl}
                       alt={artikel.JudulArtikel}
-                      className="w-12 h-12 object-cover rounded"
+                      className="w-16 h-12 object-cover rounded-md border border-gray-200"
                     />
                   </td>
-                  <td className="px-4 py-3 text-sm">
+                  <td className="px-6 py-4 max-w-xs">
+                    <div
+                      className="text-sm font-medium text-gray-900 line-clamp-1"
+                      title={artikel.JudulArtikel}
+                    >
+                      {artikel.JudulArtikel}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1 line-clamp-2">
+                      {truncateText(artikel.IsiArtikel, 80)}
+                    </div>
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
                     {formatDate(artikel.createdAt)}
                   </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center justify-center gap-2">
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end gap-2">
                       <Link
                         href={`/admin/article/${artikel._id}`}
-                        className="flex items-center justify-center w-9 h-9 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                        className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
+                        title="Edit"
                       >
-                        <FaRetweet />
+                        <Pencil className="w-4 h-4" />
                       </Link>
-
                       <button
                         onClick={() => handleDelete(artikel._id)}
-                        className="flex items-center justify-center w-9 h-9 bg-red-600 text-white rounded hover:bg-red-700 transition"
+                        className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                        title="Hapus"
                       >
-                        <FaRegTrashAlt />
+                        <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
                   </td>
@@ -130,63 +153,12 @@ export default function ArticleTable({ initialArtikels = [] }) {
         </table>
       </div>
 
-      {/* Mobile Card View */}
-      <div className="md:hidden space-y-3">
-        {artikels.length === 0 ? (
-          <div className="bg-white shadow rounded-lg p-6 text-center text-black text-sm">
-            Tidak ada data artikel
-          </div>
-        ) : (
-          artikels.map((artikel, index) => (
-            <div key={artikel._id} className="bg-white shadow rounded-lg p-3">
-              {/* Compact Header */}
-              <div className="flex items-start gap-2 mb-2">
-                <img
-                  src={artikel.ImageUrl}
-                  alt={artikel.JudulArtikel}
-                  className="w-16 h-16 object-cover rounded border border-neutral-300 flex-shrink-0"
-                />
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold text-sm text-black line-clamp-2">
-                      {artikel.JudulArtikel}
-                    </h3>
-                    <span className="text-xs text-neutral-500 flex-shrink-0">
-                      #{index + 1}
-                    </span>
-                  </div>
-                  <p className="text-xs text-neutral-600 mt-1">
-                    {formatDate(artikel.createdAt)}
-                  </p>
-                </div>
-              </div>
-
-              {/* Content Preview */}
-              <p className="text-xs text-neutral-700 mb-3 line-clamp-2">
-                {truncateText(artikel.IsiArtikel, 80)}
-              </p>
-
-              {/* Compact Actions */}
-              <div className="flex gap-2">
-                <Link
-                  href={`/admin/article/${artikel._id}`}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-blue-600 text-white py-1.5 rounded text-xs hover:bg-blue-700 transition"
-                >
-                  <FaRetweet className="text-xs" />
-                  <span>Edit</span>
-                </Link>
-                <button
-                  onClick={() => handleDelete(artikel._id)}
-                  className="flex-1 flex items-center justify-center gap-1.5 bg-red-600 text-white py-1.5 rounded text-xs hover:bg-red-700 transition"
-                >
-                  <FaRegTrashAlt className="text-xs" />
-                  <span>Hapus</span>
-                </button>
-              </div>
-            </div>
-          ))
-        )}
+      {/* Footer */}
+      <div className="px-6 py-4 border-t border-gray-100">
+        <span className="text-sm text-gray-500">
+          Total {filteredArtikels.length} Artikel
+        </span>
       </div>
-    </>
+    </div>
   );
 }

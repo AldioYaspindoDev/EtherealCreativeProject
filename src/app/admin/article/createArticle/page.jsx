@@ -103,7 +103,7 @@ export default function CreateArticlePage() {
       onSubmit={handleSubmit}
       initialData={null}
       loading={loading}
-      pageTitle="BUAT ARTIKEL"
+      pageTitle="Buat Artikel Baru"
       buttonText="Simpan Artikel"
     />
   );

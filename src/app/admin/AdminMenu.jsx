@@ -146,6 +146,19 @@ export default function AdminMenu() {
             </Link>
 
             <Link
+              href="/admin/order"
+              className={`flex items-center gap-3 transition ${
+                pathname === "/admin/order"
+                  ? "text-blue-400"
+                  : "text-white hover:text-blue-400"
+              }`}
+              onClick={closeMenu}
+            >
+              <FaFilePowerpoint className="text-xl" />
+              <span>Order</span>
+            </Link>
+
+            <Link
               href="/admin/article"
               className={`flex items-center gap-3 transition ${
                 pathname === "/admin/article"

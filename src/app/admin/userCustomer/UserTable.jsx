@@ -2,17 +2,17 @@
 
 import { useState } from "react";
 import axios from "axios";
-import { FaRegTrashAlt } from "react-icons/fa";
+import { Trash2, Search } from "lucide-react";
 import toast from "react-hot-toast";
 
 export default function UserTable({ initialUsers }) {
   const [users, setUsers] = useState(initialUsers);
+  const [searchTerm, setSearchTerm] = useState("");
+
   const handleDelete = async (id) => {
-    const confirmDelete = confirm("Yakin ingin menghapus user ?");
-    if (!confirmDelete) return;
+    if (!confirm("Yakin ingin menghapus user ini?")) return;
 
     try {
-      // fetch Delete customer
       await axios.delete(
         `${process.env.NEXT_PUBLIC_API_URL}/api/admin/customer/${id}`,
         {
@@ -20,117 +20,107 @@ export default function UserTable({ initialUsers }) {
         }
       );
       setUsers((prev) => prev.filter((item) => item._id !== id));
-      toast.success("User berhasil dihapus", {
-        duration: 3000,
-        position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "12px 24px",
-          borderRadius: "999px",
-          fontSize: "14px",
-          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
-        },
-      });
+      toast.success("User berhasil dihapus");
     } catch (error) {
       console.error("Gagal menghapus user:", error);
-      if (error.response) {
-        toast.error(
-          `Gagal: ${error.response.data.message || "Error dari server"}`,
-          {
-            duration: 4000,
-            position: "bottom-center",
-            style: {
-              background: "#ffffff",
-              color: "black",
-              padding: "16px 20px",
-              borderRadius: "16px",
-              boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-              border: "2px solid rgba(255, 255, 255, 0.2)",
-              minWidth: "320px",
-            },
-          }
-        );
-      } else if (error.request) {
-        toast.error(
-          "Gagal: Tidak bisa terhubung ke server. Cek API dan CORS.",
-          {
-            duration: 4000,
-            position: "bottom-center",
-            style: {
-              background: "#ffffff",
-              color: "black",
-              padding: "16px 20px",
-              borderRadius: "16px",
-              boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-              border: "2px solid rgba(255, 255, 255, 0.2)",
-              minWidth: "320px",
-            },
-          }
-        );
-      } else {
-        toast.error(`Gagal: ${error.message}`, {
-          duration: 4000,
-          position: "bottom-center",
-          style: {
-            background: "#ffffff",
-            color: "black",
-            padding: "16px 20px",
-            borderRadius: "16px",
-            boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-            border: "2px solid rgba(255, 255, 255, 0.2)",
-            minWidth: "320px",
-          },
-        });
-      }
+      toast.error(error.response?.data?.message || "Gagal menghapus user");
     }
   };
 
+  const filteredUsers = users.filter(
+    (user) =>
+      user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      user.nomorhp?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
   return (
-    <table className="w-full border-collapse bg-white shadow-md rounded-lg overflow-hidden">
-      <thead className="bg-neutral-800 text-white">
-        <tr>
-          <th className="px-4 py-3 text-left font-poppins">No</th>
-          <th className="px-4 py-3 text-left font-poppins">Username</th>
-          <th className="px-4 py-3 text-left font-poppins">Nomor Telephone</th>
-          <th className="px-4 py-3 text-center font-poppins">Aksi</th>
-        </tr>
-      </thead>
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-800">Daftar Pelanggan</h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Data pelanggan toko yang terdaftar
+          </p>
+        </div>
 
-      <tbody>
-        {users.length === 0 ? (
-          <tr>
-            <td
-              colSpan="4"
-              className="px-4 py-8 text-center text-black font-poppins bg-neutral-50"
-            >
-              Tidak ada data user
-            </td>
-          </tr>
-        ) : (
-          users.map((user, index) => (
-            <tr
-              key={user._id}
-              className="text-black border-b border-neutral-200 hover:bg-neutral-100 transition"
-            >
-              <td className="px-4 py-3">{index + 1}</td>
-              <td className="px-4 py-3 font-medium">{user.username}</td>
-              <td className="px-4 py-3 font-medium">{user.nomorhp}</td>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Cari Username / No. HP..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-full md:w-64"
+          />
+        </div>
+      </div>
 
-              <td className="text-center px-4 py-3">
-                <div className="flex items-center justify-center gap-2">
-                  <button
-                    onClick={() => handleDelete(user._id)}
-                    className="flex items-center justify-center bg-red-600 text-white px-3 py-2 text-sm rounded-md hover:bg-red-700 transition"
-                  >
-                    <FaRegTrashAlt />
-                  </button>
-                </div>
-              </td>
+      {/* Table */}
+      <div className="overflow-x-auto">
+        <table className="w-full">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100">
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider w-16">
+                No
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Username
+              </th>
+              <th className="px-6 py-4 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Nomor Telepon
+              </th>
+              <th className="px-6 py-4 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">
+                Aksi
+              </th>
             </tr>
-          ))
-        )}
-      </tbody>
-    </table>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {filteredUsers.length === 0 ? (
+              <tr>
+                <td colSpan="4" className="px-6 py-8 text-center text-gray-500">
+                  Tidak ada pelanggan ditemukan.
+                </td>
+              </tr>
+            ) : (
+              filteredUsers.map((user, index) => (
+                <tr
+                  key={user._id}
+                  className="hover:bg-blue-50/30 transition-colors"
+                >
+                  <td className="px-6 py-4 text-sm text-gray-500">
+                    {index + 1}
+                  </td>
+                  <td className="px-6 py-4 font-medium text-gray-900">
+                    {user.username}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-600 font-mono">
+                    {user.nomorhp || "-"}
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex items-center justify-end">
+                      <button
+                        onClick={() => handleDelete(user._id)}
+                        className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
+                        title="Hapus"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer */}
+      <div className="px-6 py-4 border-t border-gray-100">
+        <span className="text-sm text-gray-500">
+          Total {filteredUsers.length} Pelanggan
+        </span>
+      </div>
+    </div>
   );
 }

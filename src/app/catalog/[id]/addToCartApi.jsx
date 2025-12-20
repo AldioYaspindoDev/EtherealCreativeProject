@@ -86,7 +86,51 @@ export const addToCartAxios = async (productId, quantity = 1, options = {}) => {
           status: 401,
           data: {
             requireAuth: true,
-            message: error.response.data?.message || "Silakan login terlebih dahulu",
+            message:
+              error.response.data?.message || "Silakan login terlebih dahulu",
+          },
+        },
+      };
+    }
+
+    throw error;
+  }
+};
+
+// Create Order (Database + WhatsApp)
+export const createOrder = async (productId, quantity = 1, options = {}) => {
+  try {
+    const response = await axios.post(
+      `${process.env.NEXT_PUBLIC_API_URL}/orders`,
+      {
+        customerName: options.customerName,
+        customerPhone: options.customerPhone,
+        items: [
+          {
+            productId,
+            quantity,
+            selectedColor: options.color,
+            selectedSize: options.size,
+          },
+        ],
+      },
+      {
+        withCredentials: true,
+      }
+    );
+
+    return response.data;
+  } catch (error) {
+    console.error("Error creating order:", error);
+
+    if (error.response?.status === 401) {
+      throw {
+        response: {
+          status: 401,
+          data: {
+            requireAuth: true,
+            message:
+              error.response.data?.message || "Silakan login terlebih dahulu",
           },
         },
       };
