@@ -9,6 +9,7 @@ import {
   FaTimes,
   FaFileUpload,
 } from "react-icons/fa";
+import { IoBagCheck } from "react-icons/io5";
 import { RiAdminFill } from "react-icons/ri";
 import Link from "next/link";
 import Cookies from "js-cookie";
@@ -154,7 +155,7 @@ export default function AdminMenu() {
               }`}
               onClick={closeMenu}
             >
-              <FaFilePowerpoint className="text-xl" />
+              <IoBagCheck className="text-xl" />
               <span>Order</span>
             </Link>
 

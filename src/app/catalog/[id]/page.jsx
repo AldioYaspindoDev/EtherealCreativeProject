@@ -7,7 +7,7 @@ import {
   Plus,
   Minus,
 } from "lucide-react";
-import axios from "axios";
+import api from "@/utils/axios";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 import CatalogSection from "../CatalogSection";
@@ -33,10 +33,27 @@ export default function ProductDetail({ params }) {
   const [scrollPosition, setScrollPosition] = useState(0);
   const [isOrdering, setIsOrdering] = useState(false);
 
+  const [userData, setUserData] = useState(null);
+
   // Fetch product data
   useEffect(() => {
     fetchProduct();
+    fetchUser();
   }, []);
+
+  const fetchUser = async () => {
+    try {
+      const res = await api.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/api/customer/me`,
+        { withCredentials: true }
+      );
+      if (res.data?.user) {
+        setUserData(res.data.user);
+      }
+    } catch (err) {
+      console.log("User not logged in");
+    }
+  };
 
   const handleAddToCart = async (e) => {
     e.stopPropagation();
@@ -132,7 +149,7 @@ export default function ProductDetail({ params }) {
   const fetchProduct = async () => {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL;
-      const response = await axios.get(
+      const response = await api.get(
         `${API_URL}/catalogs/${unwrappedParams.id}`
       );
 
@@ -196,17 +213,54 @@ export default function ProductDetail({ params }) {
     }
 
     try {
-      setIsOrdering(true);
+      // Force fetch user data if not available (Race condition fix)
+      let currentUser = userData;
+      if (!currentUser) {
+        try {
+          const res = await api.get(
+            `${process.env.NEXT_PUBLIC_API_URL}/api/customer/me`,
+            { withCredentials: true }
+          );
+          if (res.data?.user) {
+            currentUser = res.data.user;
+            setUserData(res.data.user);
+          }
+        } catch (e) {
+          console.log("Not logged in, proceeding as guest");
+        }
+      }
 
       // Create order in database first
-      await createOrder(product._id, quantity, {
-        color: selectedColor,
-        size: selectedSize,
-        customerName: "WhatsApp Guest", // Placeholder guest data
-        customerPhone: "-", // Placeholder guest data
-      });
+      const orderPayload = {
+        userId: currentUser?._id,
+        customerName: currentUser?.username || "Guest",
+        customerPhone: currentUser?.nomorhp || "-",
+        items: [
+          {
+            productId: product._id,
+            productName: product.productName,
+            quantity: quantity,
+            selectedColor: selectedColor,
+            selectedSize: selectedSize,
+            price: product.productPrice,
+            image:
+              product.productImages[selectedImage]?.url ||
+              product.productImages[0]?.url,
+          },
+        ],
+        totalAmount: product.productPrice * quantity,
+        status: "pending",
+      };
 
-      const message = `Halo, saya ingin memesan:
+      await api.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/orders`,
+        orderPayload,
+        { withCredentials: true }
+      );
+
+      const message = `Halo, saya ${currentUser?.username || "Pelanggan"} (${
+        currentUser?.nomorhp || "-"
+      }).\nSaya ingin memesan:
 
 *${product.productName}*
 - Warna: ${selectedColor}

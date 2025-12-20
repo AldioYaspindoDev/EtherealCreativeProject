@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import axios from "axios";
+import api from "@/utils/axios";
 import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { FaWhatsapp } from "react-icons/fa";
@@ -10,6 +10,7 @@ import { useCart } from "@/context/CartContext";
 
 export default function CartPage() {
   const [userId, setUserId] = useState(null);
+  const [userData, setUserData] = useState(null);
   const [cart, setCart] = useState(null);
   const [selectedItems, setSelectedItems] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +21,7 @@ export default function CartPage() {
   useEffect(() => {
     async function fetchUser() {
       try {
-        const res = await axios.get(
+        const res = await api.get(
           `${process.env.NEXT_PUBLIC_API_URL}/api/customer/me`,
           { withCredentials: true }
         );
@@ -29,6 +30,7 @@ export default function CartPage() {
 
         if (data?.user?._id) {
           setUserId(data.user._id);
+          setUserData(data.user);
         } else {
           console.log("User belum login");
         }
@@ -49,7 +51,7 @@ export default function CartPage() {
     const fetchCart = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`${process.env.NEXT_PUBLIC_API_URL}/cart`, {
+        const res = await api.get(`${process.env.NEXT_PUBLIC_API_URL}/cart`, {
           withCredentials: true,
         });
 
@@ -100,7 +102,7 @@ export default function CartPage() {
     if (newQuantity < 1) return;
 
     try {
-      const res = await axios.put(
+      const res = await api.put(
         `${process.env.NEXT_PUBLIC_API_URL}/cart/update`,
         { itemId, quantity: newQuantity },
         { withCredentials: true }
@@ -129,7 +131,7 @@ export default function CartPage() {
   // Hapus item
   const handleRemove = async (itemId) => {
     try {
-      const res = await axios.delete(
+      const res = await api.delete(
         `${process.env.NEXT_PUBLIC_API_URL}/cart/item/${itemId}`,
         { withCredentials: true }
       );
@@ -196,20 +198,11 @@ export default function CartPage() {
   };
 
   // Handler untuk order via WhatsApp
-  const orderHandler = () => {
+  const orderHandler = async () => {
     if (!cart || !cart.items || cart.items.length === 0) {
       toast.error("Keranjang Anda kosong!", {
         duration: 4000,
         position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "16px 20px",
-          borderRadius: "16px",
-          boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-          border: "2px solid rgba(255, 255, 255, 0.2)",
-          minWidth: "320px",
-        },
       });
       return;
     }
@@ -218,15 +211,6 @@ export default function CartPage() {
       toast.error("Pilih minimal satu produk untuk dipesan!", {
         duration: 4000,
         position: "bottom-center",
-        style: {
-          background: "#ffffff",
-          color: "black",
-          padding: "16px 20px",
-          borderRadius: "16px",
-          boxShadow: "0 10px 40px rgba(245, 87, 108, 0.4)",
-          border: "2px solid rgba(255, 255, 255, 0.2)",
-          minWidth: "320px",
-        },
       });
       return;
     }
@@ -235,42 +219,87 @@ export default function CartPage() {
       selectedItems.includes(item._id)
     );
 
-    let message = "Halo, saya ingin memesan:\n\n";
+    const totalOrderAmount = calculateSelectedTotal();
 
-    itemsToOrder.forEach((item, index) => {
-      const product = item.product || {};
-      message += `*Produk ${index + 1}:*\n`;
-      message += `Nama: ${product.productName || "Tidak tersedia"}\n`;
+    // 1. Save order to backend
+    try {
+      // Construct payload compatible with backend (inferred)
+      const orderPayload = {
+        userId: userId,
+        customerName: userData?.username || "Guest",
+        customerPhone: userData?.nomorhp || "-",
+        items: itemsToOrder.map((item) => ({
+          productId: item.product._id,
+          productName: item.product.productName,
+          quantity: item.quantity,
+          selectedColor: item.color || "Default", // Changed from color to selectedColor
+          selectedSize: item.size || "Default", // Changed from size to selectedSize
+          price: item.product.productPrice,
+          image: getProductImageUrl(item.product),
+        })),
+        totalAmount: totalOrderAmount,
+        status: "pending",
+      };
 
-      if (item.color || product.productColor) {
-        message += `Warna: ${item.color || product.productColor}\n`;
-      }
+      await api.post(
+        `${process.env.NEXT_PUBLIC_API_URL}/orders`,
+        orderPayload,
+        { withCredentials: true }
+      );
 
-      if (item.size || product.productSize) {
-        message += `Ukuran: ${item.size || product.productSize}\n`;
-      }
+      toast.success("Pesanan berhasil dibuat!", {
+        duration: 3000,
+        position: "bottom-center",
+      });
 
-      message += `Jumlah: ${item.quantity} pcs\n`;
-      message += `Harga (per pcs): Rp ${(
-        product.productPrice || 0
-      ).toLocaleString("id-ID")}\n`;
-      message += `Subtotal: Rp ${(
-        (product.productPrice || 0) * item.quantity
-      ).toLocaleString("id-ID")}\n`;
-      message += `\n`;
-    });
+      // 2. Open WhatsApp
+      let message = `Halo, saya ${userData?.username || "Pelanggan"} (${
+        userData?.nomorhp || "-"
+      }).\nSaya ingin memesan:\n\n`;
 
-    const totalSelected = calculateSelectedTotal();
-    message += `*Total Keseluruhan: Rp ${totalSelected.toLocaleString(
-      "id-ID"
-    )}*\n\n`;
-    message += "Mohon info lanjut untuk total dan pengiriman. Terima kasih!";
+      itemsToOrder.forEach((item, index) => {
+        const product = item.product || {};
+        message += `*Produk ${index + 1}:*\n`;
+        message += `Nama: ${product.productName || "Tidak tersedia"}\n`;
 
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappNumber = "62895415019150";
-    const whatsappURL = `https://wa.me/${whatsappNumber}?text=${encodedMessage}`;
+        if (item.color || product.productColor) {
+          message += `Warna: ${item.color || product.productColor}\n`;
+        }
 
-    window.open(whatsappURL, "_blank");
+        if (item.size || product.productSize) {
+          message += `Ukuran: ${item.size || product.productSize}\n`;
+        }
+
+        message += `Jumlah: ${item.quantity} pcs\n`;
+        message += `Harga (per pcs): Rp ${(
+          product.productPrice || 0
+        ).toLocaleString("id-ID")}\n`;
+        message += `Subtotal: Rp ${(
+          (product.productPrice || 0) * item.quantity
+        ).toLocaleString("id-ID")}\n`;
+        message += `\n`;
+      });
+
+      message += `*Total Keseluruhan: Rp ${totalOrderAmount.toLocaleString(
+        "id-ID"
+      )}*\n\n`;
+      message += "Mohon info lanjut untuk total dan pengiriman. Terima kasih!";
+
+      const encodedMessage = encodeURIComponent(message);
+      const whatsappNumber = "62895415019150";
+      const whatsappURL = `https://wa.me/${whatsappNumber}?text=${encodedMessage}`;
+
+      window.open(whatsappURL, "_blank");
+
+      // Optional: Refresh/Clear cart UI
+      refreshCart();
+    } catch (error) {
+      console.error("Gagal membuat pesanan:", error);
+      toast.error("Gagal memproses pesanan. Silakan coba lagi.", {
+        duration: 4000,
+        position: "bottom-center",
+      });
+    }
   };
 
   // Loading state
@@ -584,8 +613,8 @@ export default function CartPage() {
                   </div>
 
                   <p className="text-xs text-gray-500 text-center">
-                    Pesan akan lansung terkirim menuju WhatsApp admin setelah klik pesan
-                    sekarang, terima kasih 
+                    Pesan akan lansung terkirim menuju WhatsApp admin setelah
+                    klik pesan sekarang, terima kasih
                   </p>
                 </div>
               </div>
