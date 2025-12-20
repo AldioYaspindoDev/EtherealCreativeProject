@@ -12,6 +12,7 @@ import catalogRoutes from "./routes/catalogRoute.js";
 import feedbackRoute from "./routes/feedbackRoutes.js";
 import keranjangrouter from "./routes/keranjangRoute.js";
 import PortofolioRouter from "./routes/portofolioRoute.js";
+import orderRoutes from "./routes/orderRoute.js";
 import { errorHandler } from "./middleware/errorHandler.js";
 import AppError from "./utils/AppError.js";
 
@@ -65,8 +66,8 @@ const FRONTEND_URL = process.env.CLIENT_URL || "http://localhost:3000";
 
 // Build allowed origins list
 const allowedOrigins = [
-  'http://localhost:3000',
-  'http://127.0.0.1:3000',
+  "http://localhost:3000",
+  "http://127.0.0.1:3000",
   FRONTEND_URL,
 ].filter((origin, index, self) => self.indexOf(origin) === index);
 
@@ -74,7 +75,7 @@ const corsOptions = {
   origin: function (origin, callback) {
     // Allow requests with no origin (Postman, mobile apps, etc.)
     if (!origin) {
-      console.log('CORS: No origin (Postman/Mobile) - ALLOWED');
+      console.log("CORS: No origin (Postman/Mobile) - ALLOWED");
       return callback(null, true);
     }
 
@@ -83,7 +84,7 @@ const corsOptions = {
       callback(null, true);
     } else {
       console.warn(`CORS: ${origin} - BLOCKED`);
-      console.warn(`Allowed: ${allowedOrigins.join(', ')}`);
+      console.warn(`Allowed: ${allowedOrigins.join(", ")}`);
       callback(new Error(`Not allowed by CORS: ${origin}`));
     }
   },
@@ -94,7 +95,7 @@ const corsOptions = {
     "Authorization",
     "X-Requested-With",
     "Accept",
-    "Origin"
+    "Origin",
   ],
   exposedHeaders: ["Set-Cookie"],
   preflightContinue: false,
@@ -167,25 +168,25 @@ app.use(speedLimiter);
 // 6. NoSQL Injection Protection - CUSTOM IMPLEMENTATION (No library)
 const sanitizeNoSQL = (req, res, next) => {
   const sanitize = (obj) => {
-    if (!obj || typeof obj !== 'object') return;
+    if (!obj || typeof obj !== "object") return;
 
     Object.keys(obj).forEach((key) => {
       // Remove keys that start with $ or contain dots (MongoDB operators)
-      if (key.startsWith('$') || key.includes('.')) {
+      if (key.startsWith("$") || key.includes(".")) {
         console.warn(`⚠️ Sanitized potentially malicious input: ${key}`);
         delete obj[key];
-      } 
+      }
       // Recursively sanitize nested objects
-      else if (typeof obj[key] === 'object' && obj[key] !== null) {
+      else if (typeof obj[key] === "object" && obj[key] !== null) {
         sanitize(obj[key]);
       }
       // Also check for $where and other dangerous patterns in strings
-      else if (typeof obj[key] === 'string') {
+      else if (typeof obj[key] === "string") {
         // Remove potential MongoDB query injections
-        const dangerous = ['$where', 'function', 'return'];
-        if (dangerous.some(pattern => obj[key].includes(pattern))) {
+        const dangerous = ["$where", "function", "return"];
+        if (dangerous.some((pattern) => obj[key].includes(pattern))) {
           console.warn(`⚠️ Sanitized dangerous string pattern in: ${key}`);
-          obj[key] = obj[key].replace(/(\$where|function|return)/gi, '');
+          obj[key] = obj[key].replace(/(\$where|function|return)/gi, "");
         }
       }
     });
@@ -197,7 +198,7 @@ const sanitizeNoSQL = (req, res, next) => {
     if (req.query) sanitize(req.query);
     if (req.params) sanitize(req.params);
   } catch (error) {
-    console.error('❌ Sanitization error:', error);
+    console.error("❌ Sanitization error:", error);
   }
 
   next();
@@ -237,8 +238,9 @@ app.get("/", (req, res) => {
       catalogs: "/catalogs",
       feedbacks: "/feedbacks",
       cart: "/cart",
-      portfolio: "/portofolio"
-    }
+      portfolio: "/portofolio",
+      orders: "/orders",
+    },
   });
 });
 
@@ -256,6 +258,7 @@ app.use("/catalogs", catalogRoutes);
 app.use("/feedbacks", feedbackRoute);
 app.use("/cart", keranjangrouter);
 app.use("/portofolio", PortofolioRouter);
+app.use("/orders", orderRoutes);
 
 // ========================================
 // ERROR HANDLERS
