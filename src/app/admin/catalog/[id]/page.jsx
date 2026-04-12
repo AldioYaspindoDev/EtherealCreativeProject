@@ -20,19 +20,15 @@ export default function UpdateCatalogPage() {
       setPageLoading(true);
       try {
         const res = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}`
+          `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}`,
         );
         const data = res.data.data;
+
         setInitialData({
           productName: data.productName,
-          productPrice: data.productPrice,
-          colors: data.colors,
-          sizes: data.sizes,
           productDescription: data.productDescription,
-          stock: data.stock,
           category: data.category,
-          productImages: data.productImages,
-          productImageFile: null,
+          variants: data.variants || [],
         });
       } catch (error) {
         console.error(error);
@@ -62,39 +58,79 @@ export default function UpdateCatalogPage() {
     setSubmitLoading(true);
 
     try {
-      const fd = new FormData();
+      // Update basic catalog info first
+      const basicFd = new FormData();
+      basicFd.append("productName", formData.productName);
+      basicFd.append("productDescription", formData.productDescription);
+      basicFd.append("category", formData.category);
 
-      fd.append("productName", formData.productName);
-      fd.append("productPrice", formData.productPrice);
-      fd.append("productDescription", formData.productDescription);
-      fd.append("category", formData.category);
-      fd.append("stock", formData.stock);
+      await axios.patch(
+        `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}`,
+        basicFd,
+        { headers: { "Content-Type": "multipart/form-data" } },
+      );
 
-      // REQUIRED fields
-      fd.append("colors", JSON.stringify(formData.colors));
-      fd.append("sizes", JSON.stringify(formData.sizes));
+      // Update each variant
+      for (const variant of formData.variants) {
+        if (variant._id) {
+          // Existing variant - update it
+          const variantFd = new FormData();
+          variantFd.append("productPrice", variant.productPrice);
+          variantFd.append("stock", variant.stock);
+          variantFd.append("color", variant.color || "");
+          variantFd.append("sizes", JSON.stringify(variant.sizes));
 
-      // existing images (wajib dikirim)
-      fd.append("existingImages", JSON.stringify(formData.productImages || []));
+          // Handle deleted images
+          if (variant.deletedImages && variant.deletedImages.length > 0) {
+            variantFd.append(
+              "deletedImages",
+              JSON.stringify(variant.deletedImages),
+            );
+          }
 
-      // Upload gambar baru (multiple)
-      if (formData.productImageFile) {
-        if (Array.isArray(formData.productImageFile)) {
-          formData.productImageFile.forEach((file) => {
-            fd.append("images", file);
-          });
+          // Handle existing images
+          if (variant.existingImages && variant.existingImages.length > 0) {
+            variantFd.append(
+              "existingImages",
+              JSON.stringify(variant.existingImages),
+            );
+          }
+
+          // Handle new images
+          if (variant.newImages && variant.newImages.length > 0) {
+            variant.newImages.forEach((file) => {
+              variantFd.append("images", file);
+            });
+          }
+
+          await axios.patch(
+            `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}/variants/${variant._id}`,
+            variantFd,
+            { headers: { "Content-Type": "multipart/form-data" } },
+          );
         } else {
-          fd.append("images", formData.productImageFile);
+          // New variant - add it
+          const variantFd = new FormData();
+          variantFd.append("productPrice", variant.productPrice);
+          variantFd.append("stock", variant.stock);
+          variantFd.append("color", variant.color || "");
+          variantFd.append("sizes", JSON.stringify(variant.sizes));
+
+          if (variant.newImages && variant.newImages.length > 0) {
+            variant.newImages.forEach((file) => {
+              variantFd.append("images", file);
+            });
+          }
+
+          await axios.post(
+            `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}/variants`,
+            variantFd,
+            { headers: { "Content-Type": "multipart/form-data" } },
+          );
         }
       }
 
-      const response = await axios.patch(
-        `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}`,
-        fd,
-        { headers: { "Content-Type": "multipart/form-data" } }
-      );
-
-      console.log("UPDATE OK:", response.data);
+      console.log("UPDATE OK");
 
       toast.success("Catalog berhasil diupdate!", {
         duration: 3000,
@@ -111,7 +147,9 @@ export default function UpdateCatalogPage() {
       router.push("/admin/catalog");
     } catch (error) {
       console.error("Gagal update:", error.response?.data || error);
-      toast.error("Update gagal.");
+      toast.error(
+        "Update gagal: " + (error.response?.data?.message || error.message),
+      );
     } finally {
       setSubmitLoading(false);
     }

@@ -23,7 +23,7 @@ export default function CartPage() {
       try {
         const res = await api.get(
           `${process.env.NEXT_PUBLIC_API_URL}/api/customer/me`,
-          { withCredentials: true }
+          { withCredentials: true },
         );
 
         const data = res.data;
@@ -105,7 +105,7 @@ export default function CartPage() {
       const res = await api.put(
         `${process.env.NEXT_PUBLIC_API_URL}/cart/update`,
         { itemId, quantity: newQuantity },
-        { withCredentials: true }
+        { withCredentials: true },
       );
 
       setCart(res.data.cart);
@@ -133,7 +133,7 @@ export default function CartPage() {
     try {
       const res = await api.delete(
         `${process.env.NEXT_PUBLIC_API_URL}/cart/item/${itemId}`,
-        { withCredentials: true }
+        { withCredentials: true },
       );
 
       setCart(res.data.cart);
@@ -162,6 +162,28 @@ export default function CartPage() {
     }
   };
 
+  // Get item price (from variant or product)
+  const getItemPrice = (item) => {
+    // 1. Check if price is stored directly in cart item
+    if (item.price) return item.price;
+
+    // 2. Find variant by variantId and get its price
+    if (item.variantId && item.product?.variants) {
+      const variant = item.product.variants.find(
+        (v) => v._id === item.variantId,
+      );
+      if (variant?.productPrice) return variant.productPrice;
+    }
+
+    // 3. If only one variant, use its price
+    if (item.product?.variants?.length > 0) {
+      return item.product.variants[0].productPrice || 0;
+    }
+
+    // 4. Fallback to legacy productPrice
+    return item.product?.productPrice || 0;
+  };
+
   // Hitung total harga item yang dipilih
   const calculateSelectedTotal = () => {
     if (!cart || !cart.items) return 0;
@@ -169,14 +191,21 @@ export default function CartPage() {
     return cart.items
       .filter((item) => selectedItems.includes(item._id))
       .reduce((total, item) => {
-        const product = item.product || {};
-        return total + (product.productPrice || 0) * item.quantity;
+        const price = getItemPrice(item);
+        return total + price * item.quantity;
       }, 0);
   };
 
   // Get product image URL
-  const getProductImageUrl = (product) => {
-    // Cek apakah ada productImages (array)
+  const getProductImageUrl = (item) => {
+    // Cek apakah ada image di item (dari cart - variant image)
+    if (item.image) {
+      return item.image;
+    }
+
+    const product = item.product || {};
+
+    // Cek apakah ada productImages (array) di product
     if (
       product.productImages &&
       Array.isArray(product.productImages) &&
@@ -184,6 +213,15 @@ export default function CartPage() {
     ) {
       const primaryImage = product.productImages.find((img) => img.isPrimary);
       return primaryImage?.url || product.productImages[0]?.url;
+    }
+
+    // Cek variants di product
+    if (product.variants && product.variants.length > 0) {
+      const variant = product.variants[0];
+      if (variant.productImages && variant.productImages.length > 0) {
+        const primaryImage = variant.productImages.find((img) => img.isPrimary);
+        return primaryImage?.url || variant.productImages[0]?.url;
+      }
     }
 
     // Fallback ke productImage (string)
@@ -216,7 +254,7 @@ export default function CartPage() {
     }
 
     const itemsToOrder = cart.items.filter((item) =>
-      selectedItems.includes(item._id)
+      selectedItems.includes(item._id),
     );
 
     const totalOrderAmount = calculateSelectedTotal();
@@ -230,22 +268,28 @@ export default function CartPage() {
         customerPhone: userData?.nomorhp || "-",
         items: itemsToOrder.map((item) => ({
           productId: item.product._id,
+          variantId: item.variantId,
           productName: item.product.productName,
           quantity: item.quantity,
-          selectedColor: item.color || "Default", // Changed from color to selectedColor
-          selectedSize: item.size || "Default", // Changed from size to selectedSize
-          price: item.product.productPrice,
-          image: getProductImageUrl(item.product),
+          // Cart might store as selectedColor/selectedSize or color/size
+          selectedColor: item.selectedColor || item.color,
+          selectedSize: item.selectedSize || item.size,
+          price: getItemPrice(item),
+          image: getProductImageUrl(item),
         })),
         totalAmount: totalOrderAmount,
         status: "pending",
       };
 
-      await api.post(
+      console.log("=== ORDER PAYLOAD DEBUG ===", orderPayload);
+
+      const response = await api.post(
         `${process.env.NEXT_PUBLIC_API_URL}/orders`,
         orderPayload,
-        { withCredentials: true }
+        { withCredentials: true },
       );
+
+      console.log("Order response:", response.data);
 
       toast.success("Pesanan berhasil dibuat!", {
         duration: 3000,
@@ -259,29 +303,26 @@ export default function CartPage() {
 
       itemsToOrder.forEach((item, index) => {
         const product = item.product || {};
+        const price = getItemPrice(item);
         message += `*Produk ${index + 1}:*\n`;
         message += `Nama: ${product.productName || "Tidak tersedia"}\n`;
 
-        if (item.color || product.productColor) {
-          message += `Warna: ${item.color || product.productColor}\n`;
+        if (item.selectedColor || item.color) {
+          message += `Warna: ${item.selectedColor || item.color}\n`;
         }
 
-        if (item.size || product.productSize) {
-          message += `Ukuran: ${item.size || product.productSize}\n`;
+        if (item.selectedSize || item.size) {
+          message += `Ukuran: ${item.selectedSize || item.size}\n`;
         }
 
         message += `Jumlah: ${item.quantity} pcs\n`;
-        message += `Harga (per pcs): Rp ${(
-          product.productPrice || 0
-        ).toLocaleString("id-ID")}\n`;
-        message += `Subtotal: Rp ${(
-          (product.productPrice || 0) * item.quantity
-        ).toLocaleString("id-ID")}\n`;
+        message += `Harga (per pcs): Rp ${price.toLocaleString("id-ID")}\n`;
+        message += `Subtotal: Rp ${(price * item.quantity).toLocaleString("id-ID")}\n`;
         message += `\n`;
       });
 
       message += `*Total Keseluruhan: Rp ${totalOrderAmount.toLocaleString(
-        "id-ID"
+        "id-ID",
       )}*\n\n`;
       message += "Mohon info lanjut untuk total dan pengiriman. Terima kasih!";
 
@@ -289,16 +330,21 @@ export default function CartPage() {
       const whatsappNumber = "62895415019150";
       const whatsappURL = `https://wa.me/${whatsappNumber}?text=${encodedMessage}`;
 
-      window.open(whatsappURL, "_blank");
+      // Gunakan location.href agar tidak diblokir oleh browser (popup blocker)
+      window.location.href = whatsappURL;
 
       // Optional: Refresh/Clear cart UI
       refreshCart();
     } catch (error) {
       console.error("Gagal membuat pesanan:", error);
-      toast.error("Gagal memproses pesanan. Silakan coba lagi.", {
-        duration: 4000,
-        position: "bottom-center",
-      });
+      console.error("Error response:", error.response?.data);
+      toast.error(
+        `Gagal memproses pesanan: ${error.response?.data?.message || error.message}`,
+        {
+          duration: 4000,
+          position: "bottom-center",
+        },
+      );
     }
   };
 
@@ -435,7 +481,8 @@ export default function CartPage() {
               <ul className="space-y-3 sm:space-y-4">
                 {cart.items.map((item) => {
                   const product = item.product || {};
-                  const imgSrc = getProductImageUrl(product);
+                  const imgSrc = getProductImageUrl(item);
+                  const itemPrice = getItemPrice(item);
                   const isSelected = selectedItems.includes(item._id);
 
                   return (
@@ -482,24 +529,28 @@ export default function CartPage() {
                           </Link>
 
                           {/* Color & Size */}
-                          {(item.color || item.size) && (
+                          {(item.selectedColor ||
+                            item.color ||
+                            item.selectedSize ||
+                            item.size) && (
                             <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mb-2">
-                              {item.color && (
+                              {(item.selectedColor || item.color) && (
                                 <span className="flex items-center gap-1">
                                   <span className="text-gray-500">Warna:</span>
                                   <span className="font-medium">
-                                    {item.color}
+                                    {item.selectedColor || item.color}
                                   </span>
                                 </span>
                               )}
-                              {item.color && item.size && (
-                                <span className="text-gray-400">•</span>
-                              )}
-                              {item.size && (
+                              {(item.selectedColor || item.color) &&
+                                (item.selectedSize || item.size) && (
+                                  <span className="text-gray-400">•</span>
+                                )}
+                              {(item.selectedSize || item.size) && (
                                 <span className="flex items-center gap-1">
                                   <span className="text-gray-500">Ukuran:</span>
                                   <span className="font-medium">
-                                    {item.size}
+                                    {item.selectedSize || item.size}
                                   </span>
                                 </span>
                               )}
@@ -508,10 +559,7 @@ export default function CartPage() {
 
                           {/* Price */}
                           <p className="text-sm sm:text-base md:text-lg font-semibold text-blue-900 mb-3">
-                            Rp{" "}
-                            {(product.productPrice || 0).toLocaleString(
-                              "id-ID"
-                            )}
+                            Rp {itemPrice.toLocaleString("id-ID")}
                           </p>
 
                           {/* Quantity Controls & Actions - Mobile: Horizontal, Desktop: Better spacing */}
@@ -544,9 +592,9 @@ export default function CartPage() {
                             <div className="flex items-center gap-2 sm:gap-3">
                               <p className="text-sm sm:text-base font-bold text-blue-900">
                                 Rp{" "}
-                                {(
-                                  (product.productPrice || 0) * item.quantity
-                                ).toLocaleString("id-ID")}
+                                {(itemPrice * item.quantity).toLocaleString(
+                                  "id-ID",
+                                )}
                               </p>
 
                               {/* Delete Button */}

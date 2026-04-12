@@ -53,7 +53,7 @@ export default function Lokasi() {
 
               {/* Address */}
               <h3 className="text-xl sm:text-2xl md:text-3xl font-bold text-blue-900 text-center mb-4">
-                Ethereal Creative Store
+                Ethereal Kreatif Store
               </h3>
               <p className="text-base sm:text-lg md:text-xl text-gray-700 text-center leading-relaxed mb-6 sm:mb-8">
                 {address}

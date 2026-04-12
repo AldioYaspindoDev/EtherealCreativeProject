@@ -6,29 +6,39 @@ import CatalogCards from "./CatalogCards";
 const CatalogSection = () => {
   const [catalogs, setCatalogs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pagination, setPagination] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  const fetchCatalog = async (page = 1, append = false) => {
+    try {
+      if (!append) setLoading(true);
+      else setLoadingMore(true);
+
+      console.log("Fetching from:", process.env.NEXT_PUBLIC_API_URL);
+
+      const response = await axios.get(
+        `${process.env.NEXT_PUBLIC_API_URL}/catalogs?page=${page}&limit=20`,
+      );
+
+      const data = Array.isArray(response.data.data) ? response.data.data : [];
+
+      if (append) {
+        setCatalogs((prev) => [...prev, ...data]);
+      } else {
+        setCatalogs(data);
+      }
+
+      setPagination(response.data.pagination);
+    } catch (error) {
+      console.error("Gagal mendapatkan data Catalog:", error.message);
+      if (!append) setCatalogs([]);
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchCatalog = async () => {
-      try {
-        console.log("Fetching from:", process.env.NEXT_PUBLIC_API_URL);
-
-        const response = await axios.get(
-          `${process.env.NEXT_PUBLIC_API_URL}/catalogs`
-        );
-
-        const data = Array.isArray(response.data.data)
-          ? response.data.data
-          : [];
-
-        setCatalogs(data);
-      } catch (error) {
-        console.error("Gagal mendapatkan data Catalog:", error.message);
-        setCatalogs([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchCatalog();
   }, []);
 
@@ -43,9 +53,7 @@ const CatalogSection = () => {
   return (
     <section className="w-full bg-white py-20">
       <div className="max-w-7xl mx-auto px-6">
-        <h2
-          className={`text-5xl font-semibold text-center text-black mb-16`}
-        >
+        <h2 className={`text-5xl font-semibold text-center text-black mb-16`}>
           Catalog
         </h2>
 
@@ -54,11 +62,26 @@ const CatalogSection = () => {
             Belum ada catalog yang tersedia.
           </p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
-            {catalogs.map((item, index) => (
-              <CatalogCards key={index} item={item} />
-            ))}
-          </div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+              {catalogs.map((item, index) => (
+                <CatalogCards key={index} item={item} />
+              ))}
+            </div>
+
+            {/* Load More Button */}
+            {pagination && pagination.page < pagination.pages && (
+              <div className="text-center mt-8">
+                <button
+                  onClick={() => fetchCatalog(pagination.page + 1, true)}
+                  disabled={loadingMore}
+                  className="bg-blue-900 text-white px-8 py-3 rounded-lg hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors font-medium"
+                >
+                  {loadingMore ? "Memuat..." : "Muat Lebih Banyak"}
+                </button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </section>

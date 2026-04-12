@@ -6,6 +6,7 @@ import {
   ShoppingCart,
   Plus,
   Minus,
+  Package,
 } from "lucide-react";
 import api from "@/utils/axios";
 import Navbar from "@/components/Navbar";
@@ -26,6 +27,9 @@ export default function ProductDetail({ params }) {
   const [product, setProduct] = useState(null);
   const [loading, setLoading] = useState(true);
   const [addingToCart, setAddingToCart] = useState(false);
+
+  // Variant selection state
+  const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
   const [selectedImage, setSelectedImage] = useState(0);
   const [selectedColor, setSelectedColor] = useState("");
   const [selectedSize, setSelectedSize] = useState("");
@@ -35,23 +39,89 @@ export default function ProductDetail({ params }) {
 
   const [userData, setUserData] = useState(null);
 
+  // Get current selected variant
+  const selectedVariant = product?.variants?.[selectedVariantIndex];
+
   // Fetch product data
   useEffect(() => {
     fetchProduct();
     fetchUser();
   }, []);
 
+  // Update color/size when variant changes
+  useEffect(() => {
+    if (selectedVariant) {
+      // Set color from variant's single color
+      setSelectedColor(selectedVariant.color || "");
+      // Set first size as default
+      if (selectedVariant.sizes?.length > 0) {
+        setSelectedSize(selectedVariant.sizes[0]);
+      } else {
+        setSelectedSize("");
+      }
+      setQuantity(1);
+      // Note: We don't reset selectedImage here to allow image-based variant switching
+    }
+  }, [selectedVariantIndex, selectedVariant]);
+
+  // Get all available colors from all variants
+  const availableColors =
+    product?.variants?.map((v) => v.color).filter(Boolean) || [];
+
+  // Get ALL images from ALL variants for thumbnail display
+  const getAllImages = () => {
+    return (
+      product?.variants?.flatMap((variant, variantIdx) =>
+        (variant.productImages || []).map((img, imgIdx) => ({
+          ...img,
+          variantIndex: variantIdx,
+          variantColor: variant.color,
+          originalIndex: imgIdx,
+        })),
+      ) || []
+    );
+  };
+  const allImages = getAllImages();
+
+  // Function to select variant by color and update image to first image of that variant
+  const selectVariantByColor = (color) => {
+    const variantIndex = product?.variants?.findIndex((v) => v.color === color);
+    if (variantIndex !== -1) {
+      setSelectedVariantIndex(variantIndex);
+      // Find first image index of this variant in allImages
+      const firstImageIndex = allImages.findIndex(
+        (img) => img.variantIndex === variantIndex,
+      );
+      if (firstImageIndex !== -1) {
+        setSelectedImage(firstImageIndex);
+      }
+    }
+  };
+
+  // Function to handle image click - also selects the corresponding variant
+  const handleImageClick = (imageIndex) => {
+    setSelectedImage(imageIndex);
+    const clickedImage = allImages[imageIndex];
+    if (clickedImage && clickedImage.variantIndex !== selectedVariantIndex) {
+      setSelectedVariantIndex(clickedImage.variantIndex);
+    }
+  };
+
   const fetchUser = async () => {
     try {
       const res = await api.get(
         `${process.env.NEXT_PUBLIC_API_URL}/api/customer/me`,
-        { withCredentials: true }
+        { withCredentials: true },
       );
       if (res.data?.user) {
         setUserData(res.data.user);
       }
     } catch (err) {
-      console.log("User not logged in");
+      console.log("User not logged in or token expired");
+      if (err.response?.status === 401) {
+        localStorage.removeItem("token");
+        setUserData(null);
+      }
     }
   };
 
@@ -59,7 +129,7 @@ export default function ProductDetail({ params }) {
     e.stopPropagation();
     e.preventDefault();
 
-    // Validasi warna dan ukuran
+    // Validate color and size
     if (!selectedColor || !selectedSize) {
       toast.error("Silakan pilih warna dan ukuran terlebih dahulu", {
         duration: 3000,
@@ -76,9 +146,9 @@ export default function ProductDetail({ params }) {
       return;
     }
 
-    // Validasi quantity
-    if (quantity < 1 || quantity > product.stock) {
-      toast.error(`Jumlah harus antara 1 dan ${product.stock}`, {
+    // Validate quantity
+    if (quantity < 1 || quantity > selectedVariant.stock) {
+      toast.error(`Jumlah harus antara 1 dan ${selectedVariant.stock}`, {
         duration: 3000,
         position: "bottom-center",
       });
@@ -88,10 +158,19 @@ export default function ProductDetail({ params }) {
     try {
       setAddingToCart(true);
 
-      // Kirim data lengkap termasuk warna, ukuran, dan quantity
+      // DEBUG: Log what's being sent
+      console.log("=== ADD TO CART DEBUG ===");
+      console.log("productId:", product._id);
+      console.log("variantId:", selectedVariant._id);
+      console.log("selectedColor:", selectedColor);
+      console.log("selectedSize:", selectedSize);
+      console.log("selectedVariant:", selectedVariant);
+
+      // Send data including variantId
       const data = await addToCart(product._id, quantity, {
         color: selectedColor,
         size: selectedSize,
+        variantId: selectedVariant._id,
       });
       refreshCart();
 
@@ -150,15 +229,23 @@ export default function ProductDetail({ params }) {
     try {
       const API_URL = process.env.NEXT_PUBLIC_API_URL;
       const response = await api.get(
-        `${API_URL}/catalogs/${unwrappedParams.id}`
+        `${API_URL}/catalogs/${unwrappedParams.id}`,
       );
 
       if (response.data.success) {
         setProduct(response.data.data);
-        if (response.data.data.colors?.length > 0)
-          setSelectedColor(response.data.data.colors[0]);
-        if (response.data.data.sizes?.length > 0)
-          setSelectedSize(response.data.data.sizes[0]);
+
+        // Set initial variant if exists
+        if (response.data.data.variants?.length > 0) {
+          const firstVariant = response.data.data.variants[0];
+          // Set color from variant's single color
+          if (firstVariant.color) {
+            setSelectedColor(firstVariant.color);
+          }
+          if (firstVariant.sizes?.length > 0) {
+            setSelectedSize(firstVariant.sizes[0]);
+          }
+        }
       }
     } catch (error) {
       console.error("Error:", error);
@@ -173,7 +260,7 @@ export default function ProductDetail({ params }) {
 
   const handleQuantityChange = (type) => {
     if (type === "increase") {
-      if (quantity < product.stock) {
+      if (quantity < selectedVariant.stock) {
         setQuantity(quantity + 1);
       }
     } else {
@@ -213,13 +300,13 @@ export default function ProductDetail({ params }) {
     }
 
     try {
-      // Force fetch user data if not available (Race condition fix)
+      // Force fetch user data if not available
       let currentUser = userData;
       if (!currentUser) {
         try {
           const res = await api.get(
             `${process.env.NEXT_PUBLIC_API_URL}/api/customer/me`,
-            { withCredentials: true }
+            { withCredentials: true },
           );
           if (res.data?.user) {
             currentUser = res.data.user;
@@ -230,7 +317,7 @@ export default function ProductDetail({ params }) {
         }
       }
 
-      // Create order in database first
+      // Create order with variant info
       const orderPayload = {
         userId: currentUser?._id,
         customerName: currentUser?.username || "Guest",
@@ -238,24 +325,25 @@ export default function ProductDetail({ params }) {
         items: [
           {
             productId: product._id,
+            variantId: selectedVariant._id,
             productName: product.productName,
             quantity: quantity,
             selectedColor: selectedColor,
             selectedSize: selectedSize,
-            price: product.productPrice,
+            price: selectedVariant.productPrice,
             image:
-              product.productImages[selectedImage]?.url ||
-              product.productImages[0]?.url,
+              selectedVariant.productImages?.[selectedImage]?.url ||
+              selectedVariant.productImages?.[0]?.url,
           },
         ],
-        totalAmount: product.productPrice * quantity,
+        totalAmount: selectedVariant.productPrice * quantity,
         status: "pending",
       };
 
       await api.post(
         `${process.env.NEXT_PUBLIC_API_URL}/orders`,
         orderPayload,
-        { withCredentials: true }
+        { withCredentials: true },
       );
 
       const message = `Halo, saya ${currentUser?.username || "Pelanggan"} (${
@@ -266,13 +354,13 @@ export default function ProductDetail({ params }) {
 - Warna: ${selectedColor}
 - Ukuran: ${selectedSize}
 - Jumlah: ${quantity}
-- Harga Satuan: ${formatPrice(product.productPrice)}
-- Total Harga: ${formatPrice(product.productPrice * quantity)}
+- Harga Satuan: ${formatPrice(selectedVariant.productPrice)}
+- Total Harga: ${formatPrice(selectedVariant.productPrice * quantity)}
 
 Apakah produk ini masih tersedia?`;
 
       const whatsappUrl = `https://wa.me/62895415019150?text=${encodeURIComponent(
-        message
+        message,
       )}`;
       window.open(whatsappUrl, "_blank");
     } catch (err) {
@@ -303,7 +391,7 @@ Apakah produk ini masih tersedia?`;
         {
           duration: 4000,
           position: "bottom-center",
-        }
+        },
       );
     } finally {
       setIsOrdering(false);
@@ -329,11 +417,11 @@ Apakah produk ini masih tersedia?`;
     );
   }
 
-  const totalPrice = product.productPrice * quantity;
-  const primaryImage =
-    product.productImages.find((img) => img.isPrimary) ||
-    product.productImages[0];
-  const thumbnails = product.productImages;
+  const totalPrice = selectedVariant
+    ? selectedVariant.productPrice * quantity
+    : 0;
+
+  const hasMultipleVariants = product.variants && product.variants.length > 1;
 
   return (
     <>
@@ -362,58 +450,75 @@ Apakah produk ini masih tersedia?`;
               <div className="space-y-4">
                 {/* Main Image */}
                 <div className="relative aspect-square rounded-xl overflow-hidden bg-gray-100 border-2 border-blue-900">
-                  <img
-                    src={
-                      product.productImages[selectedImage]?.url ||
-                      primaryImage.url
-                    }
-                    alt={product.productName}
-                    className="w-full h-full object-cover"
-                  />
-                </div>
-
-                {/* Thumbnail Slider */}
-                <div className="relative">
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => scrollThumbnails("left")}
-                      className="p-2 rounded-lg bg-white border-2 border-blue-900 hover:bg-gray-50 transition-colors z-10"
-                    >
-                      <ChevronLeft className="w-5 h-5 text-blue-900" />
-                    </button>
-
-                    <div
-                      id="thumbnail-container"
-                      className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth flex-1"
-                      style={{ scrollBehavior: "smooth" }}
-                    >
-                      {thumbnails.map((img, index) => (
-                        <button
-                          key={index}
-                          onClick={() => setSelectedImage(index)}
-                          className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all ${
-                            selectedImage === index
-                              ? "border-blue-900"
-                              : "border-gray-200 hover:border-gray-300"
-                          }`}
-                        >
-                          <img
-                            src={img.url}
-                            alt={`Thumbnail ${index + 1}`}
-                            className="w-full h-full object-cover"
-                          />
-                        </button>
-                      ))}
+                  {allImages.length > 0 ? (
+                    <img
+                      src={allImages[selectedImage]?.url || allImages[0]?.url}
+                      alt={product.productName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center text-gray-400">
+                      No Image
                     </div>
-
-                    <button
-                      onClick={() => scrollThumbnails("right")}
-                      className="p-2 rounded-lg bg-white border-2 border-blue-900 hover:bg-gray-50 transition-colors z-10"
-                    >
-                      <ChevronRight className="w-5 h-5 text-blue-900" />
-                    </button>
-                  </div>
+                  )}
+                  {/* Show which variant this image belongs to */}
+                  {allImages[selectedImage]?.variantColor && (
+                    <div className="absolute bottom-3 left-3 bg-blue-900/80 text-white px-3 py-1 rounded-full text-sm font-medium">
+                      {allImages[selectedImage].variantColor}
+                    </div>
+                  )}
                 </div>
+
+                {/* Thumbnail Slider - Shows ALL images from ALL variants */}
+                {allImages.length > 1 && (
+                  <div className="relative">
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => scrollThumbnails("left")}
+                        className="p-2 rounded-lg bg-white border-2 border-blue-900 hover:bg-gray-50 transition-colors z-10"
+                      >
+                        <ChevronLeft className="w-5 h-5 text-blue-900" />
+                      </button>
+
+                      <div
+                        id="thumbnail-container"
+                        className="flex gap-3 overflow-x-auto scrollbar-hide scroll-smooth flex-1"
+                        style={{ scrollBehavior: "smooth" }}
+                      >
+                        {allImages.map((img, index) => (
+                          <button
+                            key={`${img.variantIndex}-${img.originalIndex}`}
+                            onClick={() => handleImageClick(index)}
+                            className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all relative ${
+                              selectedImage === index
+                                ? "border-blue-900 ring-2 ring-blue-500"
+                                : "border-gray-200 hover:border-gray-300"
+                            }`}
+                          >
+                            <img
+                              src={img.url}
+                              alt={`${img.variantColor} - ${index + 1}`}
+                              className="w-full h-full object-cover"
+                            />
+                            {/* Small color indicator */}
+                            {hasMultipleVariants && (
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/60 text-white text-[9px] py-0.5 text-center truncate">
+                                {img.variantColor}
+                              </div>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+
+                      <button
+                        onClick={() => scrollThumbnails("right")}
+                        className="p-2 rounded-lg bg-white border-2 border-blue-900 hover:bg-gray-50 transition-colors z-10"
+                      >
+                        <ChevronRight className="w-5 h-5 text-blue-900" />
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* RIGHT SECTION - Product Details */}
@@ -428,96 +533,115 @@ Apakah produk ini masih tersedia?`;
                   <h1 className="text-3xl lg:text-4xl font-bold text-black mb-3">
                     {product.productName}
                   </h1>
-                  <p className="text-3xl font-medium text-black">
-                    {formatPrice(product.productPrice)}
-                  </p>
+                  {selectedVariant && (
+                    <p className="text-3xl font-medium text-black">
+                      {formatPrice(selectedVariant.productPrice)}
+                    </p>
+                  )}
                 </div>
+
+                {/* Color Selection - Acts as Variant Selector */}
+                {availableColors.length > 0 && (
+                  <div>
+                    <label className="flex items-center gap-2 text-sm font-semibold mb-3 text-blue-900">
+                      Pilih Warna <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {availableColors.map((color) => (
+                        <button
+                          key={color}
+                          onClick={() => selectVariantByColor(color)}
+                          className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${
+                            selectedColor === color
+                              ? "border-blue-900 bg-blue-50 text-blue-900"
+                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                          }`}
+                        >
+                          {color}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
 
                 {/* Stock Info */}
-                <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                  <span className="text-black font-medium">
-                    Stok tersedia: {product.stock} pcs
-                  </span>
-                </div>
-
-                {/* Color Selection */}
-                <div>
-                  <label className="flex items-center gap-2 text-sm font-semibold mb-3 text-blue-900">
-                    Pilih Warna <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {product.colors.map((color) => (
-                      <button
-                        key={color}
-                        onClick={() => setSelectedColor(color)}
-                        className={`px-4 py-2 rounded-lg border-2 font-medium transition-all ${
-                          selectedColor === color
-                            ? "border-blue-900 bg-blue-50 text-blue-900"
-                            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                        }`}
-                      >
-                        {color}
-                      </button>
-                    ))}
+                {selectedVariant && (
+                  <div className="flex items-center gap-2 p-3 bg-gray-50 rounded-lg border border-gray-200">
+                    <span className="text-black font-medium">
+                      Stok tersedia: {selectedVariant.stock} pcs
+                    </span>
                   </div>
-                </div>
+                )}
+
+                {/* Display Selected Color Info */}
+                {selectedVariant?.color && (
+                  <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg border border-blue-100">
+                    <span className="text-blue-900 font-medium">
+                      Warna: {selectedVariant.color}
+                    </span>
+                  </div>
+                )}
 
                 {/* Size Selection */}
-                <div>
-                  <label className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-1">
-                    Pilih Ukuran <span className="text-red-500">*</span>
-                  </label>
-                  <div className="flex flex-wrap gap-2">
-                    {product.sizes.map((size) => (
-                      <button
-                        key={size}
-                        onClick={() => setSelectedSize(size)}
-                        className={`w-14 h-14 rounded-lg border-2 font-semibold transition-all ${
-                          selectedSize === size
-                            ? "border-blue-900 bg-blue-50 text-blue-900"
-                            : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
-                        }`}
-                      >
-                        {size}
-                      </button>
-                    ))}
+                {selectedVariant?.sizes?.length > 0 && (
+                  <div>
+                    <label className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-1">
+                      Pilih Ukuran <span className="text-red-500">*</span>
+                    </label>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedVariant.sizes.map((size) => (
+                        <button
+                          key={size}
+                          onClick={() => setSelectedSize(size)}
+                          className={`w-14 h-14 rounded-lg border-2 font-semibold transition-all ${
+                            selectedSize === size
+                              ? "border-blue-900 bg-blue-50 text-blue-900"
+                              : "border-gray-200 bg-white text-gray-700 hover:border-gray-300"
+                          }`}
+                        >
+                          {size}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
                 {/* Quantity Selector */}
-                <div>
-                  <label className="text-sm font-semibold text-blue-900 mb-3 block">
-                    Jumlah
-                  </label>
-                  <div className="flex items-center justify-between w-full">
-                    <div className="flex items-center border-2 border-blue-900 rounded-lg">
-                      <button
-                        onClick={() => handleQuantityChange("decrease")}
-                        disabled={quantity <= 1}
-                        className="p-3 bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-blue-800"
-                      >
-                        <Minus className="w-5 h-5 text-white" />
-                      </button>
-                      <span className="px-6 font-semibold text-lg text-blue-900">
-                        {quantity}
-                      </span>
-                      <button
-                        onClick={() => handleQuantityChange("increase")}
-                        disabled={quantity >= product.stock}
-                        className="p-3 bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-blue-800"
-                      >
-                        <Plus className="w-5 h-5 text-white" />
-                      </button>
-                    </div>
+                {selectedVariant && (
+                  <div>
+                    <label className="text-sm font-semibold text-blue-900 mb-3 block">
+                      Jumlah
+                    </label>
+                    <div className="flex items-center justify-between w-full">
+                      <div className="flex items-center border-2 border-blue-900 rounded-lg">
+                        <button
+                          onClick={() => handleQuantityChange("decrease")}
+                          disabled={quantity <= 1}
+                          className="p-3 bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-blue-800"
+                        >
+                          <Minus className="w-5 h-5 text-white" />
+                        </button>
+                        <span className="px-6 font-semibold text-lg text-blue-900">
+                          {quantity}
+                        </span>
+                        <button
+                          onClick={() => handleQuantityChange("increase")}
+                          disabled={quantity >= selectedVariant.stock}
+                          className="p-3 bg-blue-900 disabled:opacity-50 disabled:cursor-not-allowed transition-colors hover:bg-blue-800"
+                        >
+                          <Plus className="w-5 h-5 text-white" />
+                        </button>
+                      </div>
 
-                    <div className="text-right ml-4">
-                      <p className="text-sm text-gray-600">Total Harga</p>
-                      <p className="text-2xl font-bold text-gray-900">
-                        {formatPrice(totalPrice)}
-                      </p>
+                      <div className="text-right ml-4">
+                        <p className="text-sm text-gray-600">Total Harga</p>
+                        <p className="text-2xl font-bold text-gray-900">
+                          {formatPrice(totalPrice)}
+                        </p>
+                      </div>
                     </div>
                   </div>
-                </div>
+                )}
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-2">

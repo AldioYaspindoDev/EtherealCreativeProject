@@ -3,59 +3,61 @@ import axios from "axios";
 // Ambil detail produk
 export const fetchCatalogById = async (id) => {
   const response = await axios.get(
-    `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}`
+    `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}`,
   );
   return response.data.data;
 };
 
-// Add to cart - FIXED VERSION
+// Add to cart - Using axios for better compatibility
 export const addToCart = async (productId, quantity = 1, options = {}) => {
   try {
-    const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/cart/add`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
+    const payload = {
+      productId,
+      variantId: options.variantId,
+      selectedColor: options.color,
+      selectedSize: options.size,
+      quantity,
+    };
+
+    console.log("=== SENDING TO BACKEND ===", payload);
+
+    const response = await axios.post(
+      `${process.env.NEXT_PUBLIC_API_URL}/cart/add`,
+      payload,
+      {
+        withCredentials: true,
       },
-      credentials: "include", // Kirim cookies otomatis
-      body: JSON.stringify({
-        productId,
-        quantity,
-        color: options.color,
-        size: options.size,
-      }),
-    });
+    );
 
-    const data = await res.json();
+    return response.data;
+  } catch (error) {
+    console.error("Error add to cart:", error);
 
-    // Cek apakah backend mengirim 401 karena belum login
-    if (res.status === 401) {
+    // Format error for consistency
+    if (error.response?.status === 401) {
       throw {
         response: {
           status: 401,
           data: {
             requireAuth: true,
-            message: data.message || "Silakan login terlebih dahulu",
+            message:
+              error.response.data?.message || "Silakan login terlebih dahulu",
           },
         },
       };
     }
 
-    // Cek apakah request berhasil
-    if (!res.ok) {
-      throw {
-        response: {
-          status: res.status,
-          data: {
-            message: data.message || "Gagal menambahkan ke keranjang",
-          },
+    throw {
+      response: {
+        status: error.response?.status || 500,
+        data: {
+          message:
+            error.response?.data?.message ||
+            error.message ||
+            "Gagal menambahkan ke keranjang",
         },
-      };
-    }
-
-    return data;
-  } catch (error) {
-    console.error("Error add to cart:", error);
-    throw error;
+      },
+    };
   }
 };
 
@@ -72,7 +74,7 @@ export const addToCartAxios = async (productId, quantity = 1, options = {}) => {
       },
       {
         withCredentials: true,
-      }
+      },
     );
 
     return response.data;
@@ -116,7 +118,7 @@ export const createOrder = async (productId, quantity = 1, options = {}) => {
       },
       {
         withCredentials: true,
-      }
+      },
     );
 
     return response.data;

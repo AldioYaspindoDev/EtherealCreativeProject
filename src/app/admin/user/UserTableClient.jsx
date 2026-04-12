@@ -90,7 +90,7 @@ export default function UserTableClient({ initialUsers }) {
               placeholder="Cari Username..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 pr-4 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-full sm:w-64"
+              className="pl-10 pr-4 text-black placeholder-gray-700 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-full sm:w-64"
             />
           </div>
           <Link

@@ -14,31 +14,36 @@ export default function CreateCatalogPage() {
     setLoading(true);
 
     try {
-      // Buat FormData baru
+      // Get first variant data (backend creates 1 variant per catalog)
+      const firstVariant = data.variants[0];
+
+      // Create FormData with flat fields (backend format)
       const formData = new FormData();
 
       formData.append("productName", data.productName);
-      formData.append("productPrice", data.productPrice);
       formData.append("productDescription", data.productDescription);
       formData.append("category", data.category);
-      formData.append("stock", data.stock);
 
-      formData.append("colors", JSON.stringify(data.colors));
-      formData.append("sizes", JSON.stringify(data.sizes));
+      // Variant data as flat fields
+      formData.append("productPrice", firstVariant.productPrice);
+      formData.append("stock", firstVariant.stock);
+      formData.append("color", firstVariant.color || "");
+      formData.append("sizes", JSON.stringify(firstVariant.sizes));
 
-      // Upload file baru
-      if (data.productImageFile && data.productImageFile.length > 0) {
-        data.productImageFile.forEach((file) => {
+      // Upload images from first variant
+      if (firstVariant.newImages && firstVariant.newImages.length > 0) {
+        firstVariant.newImages.forEach((file) => {
           formData.append("images", file);
         });
       }
 
-      // DEBUG: Lihat isi FormData yang BENAR
-      console.log("==== DEBUG FINAL FORM DATA ====");
+      // DEBUG: Log FormData contents
+      console.log("==== DEBUG FORM DATA ====");
       for (let p of formData.entries()) {
         console.log(p[0], p[1]);
       }
 
+      // Create catalog with first variant
       const response = await axios.post(
         `${process.env.NEXT_PUBLIC_API_URL}/catalogs`,
         formData,
@@ -46,8 +51,39 @@ export default function CreateCatalogPage() {
           headers: {
             "Content-Type": "multipart/form-data",
           },
-        }
+        },
       );
+
+      const catalogId = response.data.data._id;
+
+      // If there are more variants, add them using addVariant endpoint
+      if (data.variants.length > 1) {
+        for (let i = 1; i < data.variants.length; i++) {
+          const variant = data.variants[i];
+
+          const variantFormData = new FormData();
+          variantFormData.append("productPrice", variant.productPrice);
+          variantFormData.append("stock", variant.stock);
+          variantFormData.append("color", variant.color || "");
+          variantFormData.append("sizes", JSON.stringify(variant.sizes));
+
+          if (variant.newImages && variant.newImages.length > 0) {
+            variant.newImages.forEach((file) => {
+              variantFormData.append("images", file);
+            });
+          }
+
+          await axios.post(
+            `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${catalogId}/variants`,
+            variantFormData,
+            {
+              headers: {
+                "Content-Type": "multipart/form-data",
+              },
+            },
+          );
+        }
+      }
 
       toast.success("Berhasil Menambahkan Data ke Katalog", {
         duration: 3000,
@@ -66,7 +102,7 @@ export default function CreateCatalogPage() {
       console.error("Upload gagal:", error);
       toast.error(
         "Gagal menambahkan catalog: " +
-          (error.response?.data?.message || error.message)
+          (error.response?.data?.message || error.message),
       );
     } finally {
       setLoading(false);
