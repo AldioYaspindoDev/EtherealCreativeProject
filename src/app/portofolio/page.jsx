@@ -2,6 +2,8 @@ import PortofolioSection from "./portofolioSection";
 import Navbar from "@/components/Navbar";
 import Footer from "@/components/Footer";
 
+export const dynamic = 'force-dynamic';
+
 async function getPortofolios() {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/portofolio`, {

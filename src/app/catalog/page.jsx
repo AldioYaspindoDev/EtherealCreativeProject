@@ -2,6 +2,8 @@ import Navbar from "@/components/Navbar";
 import CatalogSection from "./CatalogSection";
 import Footer from "@/components/Footer";
 
+export const dynamic = 'force-dynamic';
+
 async function getCatalogs() {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/catalogs?page=1&limit=20`, {

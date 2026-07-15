@@ -8,6 +8,8 @@ import CtaSection from "@/components/CTASection";
 import ContactSection from "@/components/ContactSection";
 import Footer from "@/components/Footer";
 
+export const dynamic = 'force-dynamic';
+
 async function getArticlesForHome() {
   try {
     const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/articles`, { cache: 'no-store' });
