@@ -2,9 +2,11 @@ import express from "express";
 import {
   createOrder,
   verifyOrder,
+  completeOrder,
   cancelOrder,
   getAllOrders,
   getOrderById,
+  deleteOrder,
   getUserOrderHistory,
 } from "../controllers/orderController.js";
 
@@ -21,5 +23,7 @@ router.get("/", getAllOrders);
 router.get("/:id", getOrderById);
 router.patch("/:id/verify", verifyOrder);
 router.patch("/:id/cancel", cancelOrder);
+router.patch("/:id/complete", completeOrder);
+router.delete("/:id", deleteOrder);
 
 export default router;

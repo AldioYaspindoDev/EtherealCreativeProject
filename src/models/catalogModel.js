@@ -1,76 +1,149 @@
-import mongoose from "mongoose";
+// src/models/catalogModel.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/sequelize.js';
 
-const catalogSchema = new mongoose.Schema(
-  {
-    productName: {
-      type: String,
-      required: [true, "Product name wajib diisi."],
-      trim: true,
-    },
-
-    productPrice: {
-      type: Number,
-      required: [true, "Harga wajib diisi."],
-      min: [0, "Harga tidak boleh negatif."],
-    },
-
-    productDescription: {
-      type: String,
-      required: [true, "Deskripsi wajib diisi."],
-      trim: true,
-    },
-
-    // 📌 Banyak gambar (dengan primary)
-    productImages: [
-      {
-        url: { type: String, required: true },
-        publicId: { type: String, required: true },
-        isPrimary: { type: Boolean, default: false },
-      }
-    ],
-
-    // 📌 Warna string biasa
-    colors: {
-      type: [String],
-      required: true,
-    },
-
-    // 📌 Ukuran string biasa
-    sizes: {
-      type: [String],
-      required: true,
-    },
-
-    // 📌 Stok global
-    stock: {
-      type: Number,
-      required: true,
-      min: [0, "Stok tidak boleh negatif."],
-      default: 0,
-    },
-
-    category: {
-      type: String,
-      trim: true,
-    },
-
-    isActive: {
-      type: Boolean,
-      default: true,
+// ─── Catalog ──────────────────────────────────────────────────────────────────
+const Catalog = sequelize.define('Catalog', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  productName: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    field: 'product_name',
+    validate: {
+      notEmpty: { msg: 'Product name wajib diisi.' },
     },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-    collection: "catalogs",
-  }
-);
+  productDescription: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+    field: 'product_description',
+    validate: {
+      notEmpty: { msg: 'Deskripsi wajib diisi.' },
+    },
+  },
+  category: {
+    type: DataTypes.STRING(100),
+    allowNull: true,
+  },
+  isActive: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: true,
+    field: 'is_active',
+  },
+}, {
+  tableName: 'catalogs',
+  timestamps: true,
+  indexes: [
+    { fields: ['product_name'] },
+    { fields: ['category'] },
+    { fields: ['is_active'] },
+    { fields: ['category', 'is_active'] },
+    { fields: ['created_at'] },
+  ],
+});
 
-// INDEX
-catalogSchema.index({ productName: 1 });
-catalogSchema.index({ category: 1 });
-catalogSchema.index({ isActive: 1 });
+// ─── CatalogVariant ───────────────────────────────────────────────────────────
+export const CatalogVariant = sequelize.define('CatalogVariant', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  catalogId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    field: 'catalog_id',
+  },
+  color: {
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    validate: {
+      notEmpty: { msg: 'Warna wajib diisi.' },
+    },
+    set(value) {
+      this.setDataValue('color', value?.trim());
+    },
+  },
+  productPrice: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    field: 'product_price',
+    validate: {
+      min: { args: [0], msg: 'Harga tidak boleh negatif.' },
+    },
+  },
+  stock: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    defaultValue: 0,
+    validate: {
+      min: { args: [0], msg: 'Stok tidak boleh negatif.' },
+    },
+  },
+  // sizes disimpan sebagai JSON array: ["S","M","L","XL"]
+  sizes: {
+    type: DataTypes.JSON,
+    allowNull: false,
+    defaultValue: [],
+    validate: {
+      notEmpty(value) {
+        if (!Array.isArray(value) || value.length === 0) {
+          throw new Error('Minimal 1 ukuran harus ditambahkan.');
+        }
+      },
+    },
+  },
+}, {
+  tableName: 'catalog_variants',
+  timestamps: true,
+  indexes: [
+    { fields: ['catalog_id'] },
+  ],
+});
 
-const Catalog = mongoose.model("Catalog", catalogSchema);
+// ─── VariantImage ─────────────────────────────────────────────────────────────
+export const VariantImage = sequelize.define('VariantImage', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  variantId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    field: 'variant_id',
+  },
+  url: {
+    type: DataTypes.STRING(500),
+    allowNull: false,
+  },
+  publicId: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    field: 'public_id',
+  },
+  isPrimary: {
+    type: DataTypes.BOOLEAN,
+    defaultValue: false,
+    field: 'is_primary',
+  },
+}, {
+  tableName: 'variant_images',
+  timestamps: false,
+  indexes: [
+    { fields: ['variant_id'] },
+  ],
+});
+
+// ─── Associations ─────────────────────────────────────────────────────────────
+Catalog.hasMany(CatalogVariant, { foreignKey: 'catalogId', as: 'variants', onDelete: 'CASCADE' });
+CatalogVariant.belongsTo(Catalog, { foreignKey: 'catalogId' });
+
+CatalogVariant.hasMany(VariantImage, { foreignKey: 'variantId', as: 'productImages', onDelete: 'CASCADE' });
+VariantImage.belongsTo(CatalogVariant, { foreignKey: 'variantId' });
 
 export default Catalog;

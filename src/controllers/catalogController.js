@@ -1,63 +1,69 @@
 // controllers/catalogController.js
-import Catalog from "../models/catalogModel.js";
-import cloudinary from "../config/cloudinaryConfig.js";
+import Catalog, {
+  CatalogVariant,
+  VariantImage,
+} from "../models/catalogModel.js";
+import { Op } from "sequelize";
+import fs from "fs";
+import path from "path";
+
+// ─── Helper: normalize catalog Sequelize instance → plain JSON ───────────────
+const normalizeCatalog = (catalog) => {
+  if (!catalog) return null;
+  const plain = typeof catalog.toJSON === "function" ? catalog.toJSON() : catalog;
+  if (plain.variants) {
+    plain.variants = plain.variants.map((v) => ({
+      ...v,
+      sizes: (() => {
+        if (Array.isArray(v.sizes)) return v.sizes;
+        if (!v.sizes) return [];
+        if (typeof v.sizes === "object") return v.sizes;
+        try {
+          const parsed = JSON.parse(v.sizes);
+          return Array.isArray(parsed) ? parsed : [];
+        } catch {
+          return typeof v.sizes === "string" ? v.sizes.split(",").map(s => s.trim()) : [];
+        }
+      })(),
+    }));
+  }
+  return plain;
+};
 
 const catalogController = {
-
-  // CREATE
+  // ─── CREATE CATALOG WITH FIRST VARIANT ───────────────────────────────────────
   async createCatalog(req, res) {
     try {
       const {
         productName,
-        productPrice,
         productDescription,
         category,
-        colors,
+        productPrice,
+        color,
         sizes,
         stock,
       } = req.body;
 
-      // Validasi data wajib
       if (!productName || !productPrice) {
         return res.status(400).json({
           success: false,
           message: "Nama produk dan harga wajib diisi",
         });
       }
+      if (!color || color.trim() === "") {
+        return res
+          .status(400)
+          .json({ success: false, message: "Warna wajib diisi" });
+      }
 
-      // Parse colors & sizes
-      let parsedColors = [];
       let parsedSizes = [];
-
-      if (colors) {
-        try {
-          parsedColors = Array.isArray(colors) ? colors : JSON.parse(colors);
-        } catch (error) {
-          return res.status(400).json({
-            success: false,
-            message: "Format colors tidak valid",
-          });
-        }
+      try {
+        parsedSizes = Array.isArray(sizes) ? sizes : JSON.parse(sizes || "[]");
+      } catch {
+        return res
+          .status(400)
+          .json({ success: false, message: "Format sizes tidak valid" });
       }
-
-      if (sizes) {
-        try {
-          parsedSizes = Array.isArray(sizes) ? sizes : JSON.parse(sizes);
-        } catch (error) {
-          return res.status(400).json({
-            success: false,
-            message: "Format sizes tidak valid",
-          });
-        }
-      }
-
-      if (parsedColors.length === 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Minimal 1 warna harus ditambahkan",
-        });
-      }
-
       if (parsedSizes.length === 0) {
         return res.status(400).json({
           success: false,
@@ -65,18 +71,18 @@ const catalogController = {
         });
       }
 
-      // Handle multiple images
       const productImages = [];
-      if (req.files && req.files.length > 0) {
+      if (req.files?.length > 0) {
+        const protocol = req.protocol;
+        const host = req.get("host");
         req.files.forEach((file, index) => {
           productImages.push({
-            url: file.path,
+            url: `${protocol}://${host}/uploads/${file.filename}`,
             publicId: file.filename,
             isPrimary: index === 0,
           });
         });
       }
-
       if (productImages.length === 0) {
         return res.status(400).json({
           success: false,
@@ -84,36 +90,44 @@ const catalogController = {
         });
       }
 
-      const newCatalog = new Catalog({
+      // Buat catalog + variant + images dalam 1 transaction logic
+      const newCatalog = await Catalog.create({
         productName,
-        productPrice,
         productDescription,
         category,
-        productImages,
-        colors: parsedColors,
-        sizes: parsedSizes,
-        stock: stock || 0,
         isActive: true,
       });
+      const variant = await CatalogVariant.create({
+        catalogId: newCatalog.id,
+        color: color.trim(),
+        productPrice: Number(productPrice),
+        stock: Number(stock) || 0,
+        sizes: parsedSizes,
+      });
+      await VariantImage.bulkCreate(
+        productImages.map((img) => ({ ...img, variantId: variant.id })),
+      );
 
-      await newCatalog.save();
+      // Return dengan relasi lengkap
+      const result = await Catalog.findByPk(newCatalog.id, {
+        include: [
+          {
+            model: CatalogVariant,
+            as: "variants",
+            include: [{ model: VariantImage, as: "productImages" }],
+          },
+        ],
+      });
 
       res.status(201).json({
         success: true,
         message: "Catalog berhasil ditambahkan",
-        data: newCatalog,
+        data: normalizeCatalog(result),
       });
-
     } catch (error) {
       console.error("❌ Create Catalog Error:", error);
-
-      // Hapus gambar jika gagal
-      if (req.files?.length) {
-        for (const file of req.files) {
-          await cloudinary.v2.uploader.destroy(file.filename).catch(() => {});
-        }
-      }
-
+      if (req.files?.length)
+        req.files.forEach((f) => fs.unlink(f.path, () => {}));
       res.status(500).json({
         success: false,
         message: error.message || "Gagal menambahkan catalog",
@@ -121,223 +135,515 @@ const catalogController = {
     }
   },
 
-  // GET ALL
+  // ─── ADD VARIANT TO EXISTING CATALOG ─────────────────────────────────────────
+  async addVariant(req, res) {
+    try {
+      const { id } = req.params;
+      const { productPrice, color, sizes, stock } = req.body;
+
+      const catalog = await Catalog.findByPk(id);
+      if (!catalog)
+        return res
+          .status(404)
+          .json({ success: false, message: "Catalog tidak ditemukan" });
+
+      if (!color || color.trim() === "") {
+        return res
+          .status(400)
+          .json({ success: false, message: "Warna wajib diisi" });
+      }
+
+      let parsedSizes = Array.isArray(sizes)
+        ? sizes
+        : JSON.parse(sizes || "[]");
+      if (parsedSizes.length === 0)
+        return res
+          .status(400)
+          .json({ success: false, message: "Sizes wajib diisi" });
+
+      const variant = await CatalogVariant.create({
+        catalogId: catalog.id,
+        color: color.trim(),
+        productPrice: Number(productPrice),
+        stock: Number(stock) || 0,
+        sizes: parsedSizes,
+      });
+
+      if (req.files?.length > 0) {
+        const protocol = req.protocol;
+        const host = req.get("host");
+        await VariantImage.bulkCreate(
+          req.files.map((file, index) => ({
+            variantId: variant.id,
+            url: `${protocol}://${host}/uploads/${file.filename}`,
+            publicId: file.filename,
+            isPrimary: index === 0,
+          })),
+        );
+      }
+
+      const result = await Catalog.findByPk(id, {
+        include: [
+          {
+            model: CatalogVariant,
+            as: "variants",
+            include: [{ model: VariantImage, as: "productImages" }],
+          },
+        ],
+      });
+
+      res.status(201).json({
+        success: true,
+        message: "Variant berhasil ditambahkan",
+        data: normalizeCatalog(result),
+      });
+    } catch (error) {
+      console.error("❌ Add Variant Error:", error);
+      if (req.files?.length)
+        req.files.forEach((f) => fs.unlink(f.path, () => {}));
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // ─── GET ALL ──────────────────────────────────────────────────────────────────
   async getAllCatalog(req, res) {
     try {
-      const { category, isActive } = req.query;
+      const { category, isActive, page = 1, limit = 20 } = req.query;
+      const where = {};
+      if (category) where.category = category;
+      if (isActive !== undefined) where.isActive = isActive === "true";
 
-      const filter = {};
-      if (category) filter.category = category;
-      if (isActive !== undefined) filter.isActive = isActive === "true";
-
-      const catalogs = await Catalog.find(filter).sort({ createdAt: -1 });
+      const offset = (parseInt(page) - 1) * parseInt(limit);
+      const { count, rows } = await Catalog.findAndCountAll({
+        where,
+        include: [
+          {
+            model: CatalogVariant,
+            as: "variants",
+            include: [{ model: VariantImage, as: "productImages" }],
+          },
+        ],
+        order: [["createdAt", "DESC"]],
+        limit: parseInt(limit),
+        offset,
+        distinct: true,
+        subQuery: false, // Prevents slow nested subqueries in MySQL
+      });
 
       res.status(200).json({
         success: true,
         message: "Berhasil mengambil semua catalog",
-        count: catalogs.length,
-        data: catalogs,
+        count: rows.length,
+        data: rows.map(normalizeCatalog),
+        pagination: {
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total: count,
+          pages: Math.ceil(count / parseInt(limit)),
+        },
       });
-
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   },
 
-  // GET BY ID
+  // ─── GET BY ID ────────────────────────────────────────────────────────────────
   async getCatalogById(req, res) {
     try {
-      const catalog = await Catalog.findById(req.params.id);
-
-      if (!catalog) {
-        return res.status(404).json({
-          success: false,
-          message: "Catalog tidak ditemukan",
-        });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: catalog,
+      const catalog = await Catalog.findByPk(req.params.id, {
+        include: [
+          {
+            model: CatalogVariant,
+            as: "variants",
+            include: [{ model: VariantImage, as: "productImages" }],
+          },
+        ],
       });
+      if (!catalog)
+        return res
+          .status(404)
+          .json({ success: false, message: "Catalog tidak ditemukan" });
 
+      res.status(200).json({ success: true, data: normalizeCatalog(catalog) });
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   },
 
-  // Search Catalog 
-  async searchCatalog(req,res){
+  // ─── GET VARIANT BY ID ────────────────────────────────────────────────────────
+  async getVariantById(req, res) {
     try {
-      const {q} = req.query;
+      const { id, variantId } = req.params;
+      const catalog = await Catalog.findByPk(id);
+      if (!catalog)
+        return res
+          .status(404)
+          .json({ success: false, message: "Catalog tidak ditemukan" });
 
-      if(!q) {
-        return res.status(404).json({
-          success: false,
-          message: "data harus diisi"
-        });
-      };
-
-      const catalogs = await Catalog.find({
-        productName: { $regex: q, $options: "i" },
+      const variant = await CatalogVariant.findOne({
+        where: { id: variantId, catalogId: id },
+        include: [{ model: VariantImage, as: "productImages" }],
       });
-
-      res.json(catalogs);
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  },
-
-  // UPDATE
-  async updateCatalog(req, res) {
-    try {
-      const catalog = await Catalog.findById(req.params.id);
-      if (!catalog) {
-        return res.status(404).json({
-          success: false,
-          message: "Catalog tidak ditemukan",
-        });
-      }
-
-      const updateData = { ...req.body };
-
-      // Parse colors & sizes
-      if (req.body.colors) {
-        updateData.colors = JSON.parse(req.body.colors);
-      }
-      if (req.body.sizes) {
-        updateData.sizes = JSON.parse(req.body.sizes);
-      }
-
-      // Upload gambar baru
-      if (req.files?.length) {
-        const newImages = req.files.map((file, index) => ({
-          url: file.path,
-          publicId: file.filename,
-          isPrimary: index === 0,
-        }));
-
-        let existingImages = [];
-        if (req.body.existingImages) {
-          existingImages = JSON.parse(req.body.existingImages);
-        }
-
-        updateData.productImages = [...existingImages, ...newImages];
-      }
-
-      // Hapus gambar yang dipilih
-      if (req.body.deletedImages) {
-        const deleteList = JSON.parse(req.body.deletedImages);
-        for (const publicId of deleteList) {
-          await cloudinary.v2.uploader.destroy(publicId).catch(() => {});
-        }
-      }
-
-      const updated = await Catalog.findByIdAndUpdate(
-        req.params.id,
-        updateData,
-        { new: true, runValidators: true }
-      );
-
-      res.status(200).json({
-        success: true,
-        message: "Catalog berhasil diupdate",
-        data: updated,
-      });
-
-    } catch (error) {
-      res.status(400).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  },
-
-  // DELETE
-  async deleteCatalog(req, res) {
-    try {
-      const catalog = await Catalog.findById(req.params.id);
-      if (!catalog) {
-        return res.status(404).json({
-          success: false,
-          message: "Catalog tidak ditemukan",
-        });
-      }
-
-      // Hapus gambar dari Cloudinary
-      for (const img of catalog.productImages) {
-        await cloudinary.v2.uploader.destroy(img.publicId).catch(() => {});
-      }
-
-      await Catalog.findByIdAndDelete(req.params.id);
-
-      res.status(200).json({
-        success: true,
-        message: "Catalog berhasil dihapus",
-      });
-
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  },
-
-  // BONUS: GET COLORS
-  async getProductColors(req, res) {
-    try {
-      const catalog = await Catalog.findById(req.params.id);
-      if (!catalog) {
-        return res.status(404).json({ success: false, message: "Catalog tidak ditemukan" });
-      }
-
-      res.status(200).json({
-        success: true,
-        data: catalog.colors,
-      });
-
-    } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
-    }
-  },
-
-  // BONUS: stock hanya global, tidak per warna/size
-  async checkStock(req, res) {
-    try {
-      const catalog = await Catalog.findById(req.params.id);
-      if (!catalog) {
-        return res.status(404).json({ success: false, message: "Catalog tidak ditemukan" });
-      }
+      if (!variant)
+        return res
+          .status(404)
+          .json({ success: false, message: "Variant tidak ditemukan" });
 
       res.status(200).json({
         success: true,
         data: {
-          stock: catalog.stock,
-          available: catalog.stock > 0,
+          productId: catalog.id,
+          productName: catalog.productName,
+          variant: {
+            ...variant.toJSON(),
+            sizes: (() => {
+              const s = variant.sizes;
+              if (Array.isArray(s)) return s;
+              try { return JSON.parse(s || "[]"); }
+              catch { return typeof s === "string" ? s.split(",") : []; }
+            })(),
+          },
         },
       });
-
     } catch (error) {
-      res.status(500).json({
-        success: false,
-        message: error.message,
-      });
+      res.status(500).json({ success: false, message: error.message });
     }
   },
 
+  // ─── SEARCH CATALOG ───────────────────────────────────────────────────────────
+  async searchCatalog(req, res) {
+    try {
+      const { q } = req.query;
+      if (!q)
+        return res
+          .status(400)
+          .json({ success: false, message: "Query harus diisi" });
+
+      const catalogs = await Catalog.findAll({
+        where: { productName: { [Op.like]: `%${q}%` } },
+        include: [
+          {
+            model: CatalogVariant,
+            as: "variants",
+            include: [{ model: VariantImage, as: "productImages" }],
+          },
+        ],
+      });
+      res.json({ success: true, data: catalogs.map(normalizeCatalog) });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // ─── UPDATE CATALOG (basic info) ─────────────────────────────────────────────
+  async updateCatalog(req, res) {
+    try {
+      const catalog = await Catalog.findByPk(req.params.id);
+      if (!catalog)
+        return res
+          .status(404)
+          .json({ success: false, message: "Catalog tidak ditemukan" });
+
+      const { productName, productDescription, category, isActive } = req.body;
+      await catalog.update({
+        productName: productName ?? catalog.productName,
+        productDescription: productDescription ?? catalog.productDescription,
+        category: category ?? catalog.category,
+        isActive:
+          isActive !== undefined
+            ? isActive === "true" || isActive === true
+            : catalog.isActive,
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Catalog berhasil diupdate",
+        data: catalog,
+      });
+    } catch (error) {
+      res.status(400).json({ success: false, message: error.message });
+    }
+  },
+
+  // ─── UPDATE VARIANT ───────────────────────────────────────────────────────────
+  async updateVariant(req, res) {
+    try {
+      const { id, variantId } = req.params;
+
+      const catalog = await Catalog.findByPk(id);
+      if (!catalog)
+        return res
+          .status(404)
+          .json({ success: false, message: "Catalog tidak ditemukan" });
+
+      const variant = await CatalogVariant.findOne({
+        where: { id: variantId, catalogId: id },
+        include: [{ model: VariantImage, as: "productImages" }],
+      });
+      if (!variant)
+        return res
+          .status(404)
+          .json({ success: false, message: "Variant tidak ditemukan" });
+
+      const {
+        productPrice,
+        stock,
+        color,
+        sizes,
+        deletedImages,
+        existingImages,
+      } = req.body;
+
+      await variant.update({
+        productPrice:
+          productPrice !== undefined
+            ? Number(productPrice)
+            : variant.productPrice,
+        stock: stock !== undefined ? Number(stock) : variant.stock,
+        color: color ? color.trim() : variant.color,
+        sizes: sizes
+          ? Array.isArray(sizes)
+            ? sizes
+            : JSON.parse(sizes)
+          : variant.sizes,
+      });
+
+      // Handle deleted images (explicitly requested to be removed)
+      if (deletedImages) {
+        try {
+          const deleteList = Array.isArray(deletedImages) ? deletedImages : JSON.parse(deletedImages);
+          for (const publicId of deleteList) {
+            if (!publicId) continue;
+            await VariantImage.destroy({
+              where: { variantId: variant.id, publicId },
+            });
+            const filePath = path.join("public/uploads", publicId);
+            if (fs.existsSync(filePath)) {
+              fs.unlink(filePath, () => {});
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing deletedImages:", e);
+        }
+      }
+
+      // Handle existing images (keep-list: anything not in this list should be removed)
+      if (existingImages) {
+        try {
+          const kept = Array.isArray(existingImages) ? existingImages : JSON.parse(existingImages);
+          const keepPublicIds = kept
+            .map((img) => img.publicId || img.public_id || img)
+            .filter(Boolean);
+
+          if (keepPublicIds.length > 0) {
+            await VariantImage.destroy({
+              where: {
+                variantId: variant.id,
+                publicId: { [Op.notIn]: keepPublicIds },
+              },
+            });
+          }
+        } catch (e) {
+          console.error("Error parsing existingImages:", e);
+        }
+      }
+
+      // Handle new images upload
+      if (req.files?.length) {
+        const protocol = req.protocol;
+        const host = req.get("host");
+        
+        await VariantImage.bulkCreate(
+          req.files.map((file, index) => ({
+            variantId: variant.id,
+            url: `${protocol}://${host}/uploads/${file.filename}`,
+            publicId: file.filename,
+            isPrimary: variant.productImages?.length === 0 && index === 0,
+          })),
+        );
+      }
+
+      const result = await Catalog.findByPk(id, {
+        include: [
+          {
+            model: CatalogVariant,
+            as: "variants",
+            include: [{ model: VariantImage, as: "productImages" }],
+          },
+        ],
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Variant berhasil diupdate",
+        data: normalizeCatalog(result),
+      });
+    } catch (error) {
+      console.error("Update Variant Error:", error);
+      if (req.files?.length)
+        req.files.forEach((f) => fs.unlink(f.path, () => {}));
+      res.status(400).json({ success: false, message: error.message });
+    }
+  },
+
+  // ─── DELETE VARIANT ───────────────────────────────────────────────────────────
+  async deleteVariant(req, res) {
+    try {
+      const { id, variantId } = req.params;
+
+      const catalog = await Catalog.findByPk(id, {
+        include: [{ model: CatalogVariant, as: "variants" }],
+      });
+      if (!catalog)
+        return res
+          .status(404)
+          .json({ success: false, message: "Catalog tidak ditemukan" });
+
+      if (catalog.variants.length <= 1) {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Tidak dapat menghapus variant terakhir. Hapus catalog jika ingin menghapus seluruh produk.",
+        });
+      }
+
+      const variant = await CatalogVariant.findOne({
+        where: { id: variantId, catalogId: id },
+        include: [{ model: VariantImage, as: "productImages" }],
+      });
+      if (!variant)
+        return res
+          .status(404)
+          .json({ success: false, message: "Variant tidak ditemukan" });
+
+      // Hapus gambar-gambar variant
+      for (const img of variant.productImages) {
+        if (img.publicId)
+          fs.unlink(path.join("public/uploads", img.publicId), () => {});
+      }
+
+      await variant.destroy(); // cascade delete images
+
+      const result = await Catalog.findByPk(id, {
+        include: [
+          {
+            model: CatalogVariant,
+            as: "variants",
+            include: [{ model: VariantImage, as: "productImages" }],
+          },
+        ],
+      });
+
+      res.status(200).json({
+        success: true,
+        message: "Variant berhasil dihapus",
+        data: normalizeCatalog(result),
+      });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // ─── DELETE CATALOG ───────────────────────────────────────────────────────────
+  async deleteCatalog(req, res) {
+    try {
+      const catalog = await Catalog.findByPk(req.params.id, {
+        include: [
+          {
+            model: CatalogVariant,
+            as: "variants",
+            include: [{ model: VariantImage, as: "productImages" }],
+          },
+        ],
+      });
+      if (!catalog)
+        return res
+          .status(404)
+          .json({ success: false, message: "Catalog tidak ditemukan" });
+
+      // Hapus semua gambar dari local storage
+      for (const variant of catalog.variants) {
+        for (const img of variant.productImages) {
+          if (img.publicId)
+            fs.unlink(path.join("public/uploads", img.publicId), () => {});
+        }
+      }
+
+      await catalog.destroy(); // cascade ke variants & images
+
+      res
+        .status(200)
+        .json({ success: true, message: "Catalog berhasil dihapus" });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // ─── CHECK STOCK ──────────────────────────────────────────────────────────────
+  async checkStock(req, res) {
+    try {
+      const { id, variantId } = req.params;
+
+      const catalog = await Catalog.findByPk(id);
+      if (!catalog)
+        return res
+          .status(404)
+          .json({ success: false, message: "Catalog tidak ditemukan" });
+
+      if (variantId) {
+        const variant = await CatalogVariant.findOne({
+          where: { id: variantId, catalogId: id },
+        });
+        if (!variant)
+          return res
+            .status(404)
+            .json({ success: false, message: "Variant tidak ditemukan" });
+        return res.status(200).json({
+          success: true,
+          data: {
+            variantId: variant.id,
+            stock: variant.stock,
+            available: variant.stock > 0,
+          },
+        });
+      }
+
+      const variants = await CatalogVariant.findAll({
+        where: { catalogId: id },
+      });
+      const stockInfo = variants.map((v) => ({
+        variantId: v.id,
+        stock: v.stock,
+        available: v.stock > 0,
+        color: v.color,
+        sizes: v.sizes,
+      }));
+
+      res.status(200).json({ success: true, data: stockInfo });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
+
+  // ─── GET PRODUCT COLORS ───────────────────────────────────────────────────────
+  async getProductColors(req, res) {
+    try {
+      const variants = await CatalogVariant.findAll({
+        where: { catalogId: req.params.id },
+        attributes: ["color"],
+      });
+      if (!variants.length)
+        return res.status(404).json({
+          success: false,
+          message: "Catalog tidak ditemukan atau tidak ada variant",
+        });
+
+      const colors = [...new Set(variants.map((v) => v.color))];
+      res.status(200).json({ success: true, data: colors });
+    } catch (error) {
+      res.status(500).json({ success: false, message: error.message });
+    }
+  },
 };
 
 export default catalogController;

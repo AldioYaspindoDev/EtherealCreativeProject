@@ -1,56 +1,62 @@
-import dotenv from "dotenv";
-import app from "./app.js";
-import connectDB from "./config/database.js";
+import dotenv from 'dotenv';
+import app from './app.js';
+import connectDB from './config/database.js';
+import { syncDB } from './models/index.js';  // Import semua model & sync helper
 
 // Load environment variables
 dotenv.config();
 
 // ========================================
-// DATABASE CONNECTION
-// ========================================
-connectDB();
-
-// ========================================
-// SERVER CONFIGURATION
+// STARTUP SEQUENCE
 // ========================================
 const PORT = process.env.PORT || 5000;
-const NODE_ENV = process.env.NODE_ENV || "development";
+const NODE_ENV = process.env.NODE_ENV || 'development';
 
-// ========================================
-// START SERVER
-// ========================================
-const server = app.listen(PORT, () => {
-  console.log(`Server running in ${NODE_ENV} mode on port ${PORT}`);
-  console.log(`API URL: ${process.env.CLIENT_URL || "http://localhost:3000"}`);
-  console.log(`Server URL: http://localhost:${PORT}`);
-});
+const startServer = async () => {
+  try {
+    // 1. Test koneksi MySQL
+    await connectDB();
 
-// ========================================
-// GRACEFUL SHUTDOWN
-// ========================================
-process.on("SIGTERM", () => {
-  console.log("SIGTERM signal received: closing HTTP server");
-  server.close(() => {
-    console.log("HTTP server closed");
-    process.exit(0);
-  });
-});
+    // 2. Sync semua tabel (alter: true aman untuk dev — hanya ALTER jika perlu)
+    //    Untuk production, ganti dengan migrasi manual via sequelize-cli
+    const syncOptions = NODE_ENV === 'production'
+      ? {}              // production: tidak auto-sync, pakai migrations
+      : { alter: true }; // development: auto-alter table
 
-process.on("SIGINT", () => {
-  console.log("SIGINT signal received: closing HTTP server");
-  server.close(() => {
-    console.log("HTTP server closed");
-    process.exit(0);
-  });
-});
+    await syncDB(syncOptions);
 
-// Handle unhandled promise rejections
-process.on("unhandledRejection", (err) => {
-  console.error("UNHANDLED REJECTION! Shutting down...");
-  console.error(err.name, err.message);
-  server.close(() => {
+    // 3. Start server
+    const server = app.listen(PORT, () => {
+      console.log(`🚀 Server running in ${NODE_ENV} mode on port ${PORT}`);
+      console.log(`🌐 Server URL: http://localhost:${PORT}`);
+    });
+
+    // ========================================
+    // GRACEFUL SHUTDOWN
+    // ========================================
+    const shutdown = (signal) => {
+      console.log(`\n${signal} received: closing HTTP server`);
+      server.close(() => {
+        console.log('HTTP server closed');
+        process.exit(0);
+      });
+    };
+
+    process.on('SIGTERM', () => shutdown('SIGTERM'));
+    process.on('SIGINT',  () => shutdown('SIGINT'));
+
+    // Handle unhandled promise rejections
+    process.on('unhandledRejection', (err) => {
+      console.error('UNHANDLED REJECTION! Shutting down...');
+      console.error(err.name, err.message);
+      server.close(() => process.exit(1));
+    });
+
+    return server;
+  } catch (err) {
+    console.error('❌ Failed to start server:', err.message);
     process.exit(1);
-  });
-});
+  }
+};
 
-export default server;
+startServer();

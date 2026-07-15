@@ -1,17 +1,19 @@
 // utils/validationSchemas.js - Input Validation with Joi
-import Joi from 'joi';
+import Joi from "joi";
 
 // Password validation with strong requirements
 const passwordSchema = Joi.string()
   .min(8)
   .max(128)
-  .pattern(/^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+\-=[\]{};':"\\|,.<>/?])/)
+  .pattern(
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&#^()_+\-=[\]{};':"\\|,.<>/?])/,
+  )
   .required()
   .messages({
-    'string.pattern.base': 
-      'Password harus minimal 8 karakter dan mengandung huruf besar, kecil, angka, dan simbol',
-    'string.min': 'Password minimal 8 karakter',
-    'string.max': 'Password maksimal 128 karakter',
+    "string.pattern.base":
+      "Password harus minimal 8 karakter dan mengandung huruf besar, kecil, angka, dan simbol",
+    "string.min": "Password minimal 8 karakter",
+    "string.max": "Password maksimal 128 karakter",
   });
 
 // Username validation
@@ -22,16 +24,16 @@ const usernameSchema = Joi.string()
   .lowercase()
   .required()
   .messages({
-    'string.alphanum': 'Username hanya boleh berisi huruf dan angka',
-    'string.min': 'Username minimal 3 karakter',
-    'string.max': 'Username maksimal 30 karakter',
+    "string.alphanum": "Username hanya boleh berisi huruf dan angka",
+    "string.min": "Username minimal 3 karakter",
+    "string.max": "Username maksimal 30 karakter",
   });
 
 // Auth Schemas
 export const registerAdminSchema = Joi.object({
   username: usernameSchema,
   password: passwordSchema,
-  role: Joi.string().valid('admin').default('admin'),
+  role: Joi.string().valid("admin").default("admin"),
 });
 
 export const registerCustomerSchema = Joi.object({
@@ -41,7 +43,7 @@ export const registerCustomerSchema = Joi.object({
     .pattern(/^[0-9]{10,15}$/)
     .required()
     .messages({
-      'string.pattern.base': 'Nomor HP harus berupa angka 10-15 digit',
+      "string.pattern.base": "Nomor HP harus berupa angka 10-15 digit",
     }),
 });
 
@@ -59,13 +61,13 @@ export const createCatalogSchema = Joi.object({
   colors: Joi.alternatives()
     .try(
       Joi.array().items(Joi.string().trim()).min(1),
-      Joi.string() // Will be parsed as JSON
+      Joi.string(), // Will be parsed as JSON
     )
     .required(),
   sizes: Joi.alternatives()
     .try(
       Joi.array().items(Joi.string().trim()).min(1),
-      Joi.string() // Will be parsed as JSON
+      Joi.string(), // Will be parsed as JSON
     )
     .required(),
   stock: Joi.number().integer().min(0).default(0),
@@ -78,11 +80,11 @@ export const updateCatalogSchema = Joi.object({
   category: Joi.string().trim(),
   colors: Joi.alternatives().try(
     Joi.array().items(Joi.string().trim()),
-    Joi.string()
+    Joi.string(),
   ),
   sizes: Joi.alternatives().try(
     Joi.array().items(Joi.string().trim()),
-    Joi.string()
+    Joi.string(),
   ),
   stock: Joi.number().integer().min(0),
   existingImages: Joi.string(), // JSON string
@@ -91,21 +93,41 @@ export const updateCatalogSchema = Joi.object({
 
 // Cart Schema
 export const addToCartSchema = Joi.object({
-  productId: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  productId: Joi.number()
+    .integer()
+    .positive()
     .required()
     .messages({
-      'string.pattern.base': 'Product ID tidak valid',
+      "number.base": "Product ID harus berupa angka",
+      "any.required": "Product ID wajib diisi",
     }),
+  variantId: Joi.number()
+    .integer()
+    .positive()
+    .required()
+    .messages({
+      "number.base": "Variant ID harus berupa angka",
+      "any.required": "Variant ID wajib diisi",
+    }),
+  selectedColor: Joi.string().trim().required().messages({
+    "string.empty": "Warna harus dipilih",
+    "any.required": "Warna harus dipilih",
+  }),
+  selectedSize: Joi.string().trim().required().messages({
+    "string.empty": "Ukuran harus dipilih",
+    "any.required": "Ukuran harus dipilih",
+  }),
   quantity: Joi.number().integer().min(1).max(100).default(1),
 });
 
 export const updateCartSchema = Joi.object({
-  itemId: Joi.string()
-    .pattern(/^[0-9a-fA-F]{24}$/)
+  itemId: Joi.number()
+    .integer()
+    .positive()
     .required()
     .messages({
-      'string.pattern.base': 'Item ID tidak valid',
+      "number.base": "Item ID harus berupa angka",
+      "any.required": "Item ID wajib diisi",
     }),
   quantity: Joi.number().integer().min(0).max(100).required(),
 });
@@ -115,41 +137,42 @@ export const createArticleSchema = Joi.object({
   JudulArtikel: Joi.string().min(5).max(200).trim().required(),
   IsiArtikel: Joi.string().min(50).required(),
   ImageUrl: Joi.string()
-    .uri({ scheme: ['http', 'https'] })
+    .uri({ scheme: ["http", "https"] })
     .custom((value, helpers) => {
       try {
         const url = new URL(value);
-        const allowedDomains = process.env.ALLOWED_IMAGE_DOMAINS?.split(',') || [];
-        
+        const allowedDomains =
+          process.env.ALLOWED_IMAGE_DOMAINS?.split(",") || [];
+
         // Block internal IPs
         if (
-          url.hostname === 'localhost' ||
-          url.hostname.startsWith('127.') ||
-          url.hostname.startsWith('192.168.') ||
-          url.hostname.startsWith('10.') ||
-          url.hostname === '169.254.169.254'
+          url.hostname === "localhost" ||
+          url.hostname.startsWith("127.") ||
+          url.hostname.startsWith("192.168.") ||
+          url.hostname.startsWith("10.") ||
+          url.hostname === "169.254.169.254"
         ) {
-          return helpers.error('any.invalid');
+          return helpers.error("any.invalid");
         }
-        
+
         // Check whitelist
-        const isAllowed = allowedDomains.some(domain => 
-          url.hostname.endsWith(domain.trim())
+        const isAllowed = allowedDomains.some((domain) =>
+          url.hostname.endsWith(domain.trim()),
         );
-        
+
         if (!isAllowed && allowedDomains.length > 0) {
-          return helpers.error('any.invalid');
+          return helpers.error("any.invalid");
         }
-        
+
         return value;
       } catch {
-        return helpers.error('any.invalid');
+        return helpers.error("any.invalid");
       }
     })
     .optional()
     .allow(null)
     .messages({
-      'any.invalid': 'URL gambar tidak diizinkan atau tidak valid',
+      "any.invalid": "URL gambar tidak diizinkan atau tidak valid",
     }),
 });
 
@@ -176,7 +199,7 @@ export const validate = (schema) => {
       const errors = error.details.map((detail) => detail.message);
       return res.status(400).json({
         success: false,
-        message: 'Validation error',
+        message: "Validation error",
         errors,
       });
     }

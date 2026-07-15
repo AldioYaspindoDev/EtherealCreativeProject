@@ -1,31 +1,34 @@
-import mongoose from "mongoose";
+// src/models/portofolioModel.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/sequelize.js';
 
-const portofolioSchema = new mongoose.Schema(
-  {
-    keterangan: {
-      type: String,
-      required: [true, "Keterangan Portofolio Wajib Diisi"],
-      trim: true,
-    },
-    // 1. Field 'gambar' sekarang akan menyimpan URL publik Cloudinary
-    gambar: {
-      type: String,
-      trim: true,
-      default: null,
-    },
-    // 2. Tambahkan field untuk Public ID Cloudinary
-    gambarPublicId: {
-      type: String,
-      trim: true,
-      default: null,
+const Portofolio = sequelize.define('Portofolio', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  keterangan: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+    validate: {
+      notEmpty: { msg: 'Keterangan Portofolio Wajib Diisi' },
     },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-  }
-);
-
-const Portofolio = mongoose.model("Portofolio", portofolioSchema);
+  gambar: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    defaultValue: null,
+  },
+  gambarPublicId: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    defaultValue: null,
+    field: 'gambar_public_id',
+  },
+}, {
+  tableName: 'portofolios',
+  timestamps: true,
+});
 
 export default Portofolio;

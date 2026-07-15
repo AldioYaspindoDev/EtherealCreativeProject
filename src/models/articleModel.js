@@ -1,54 +1,44 @@
-import mongoose from "mongoose";
+// src/models/articleModel.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/sequelize.js';
 
-const articleSchema = new mongoose.Schema(
-  {
-    JudulArtikel: {
-      type: String,
-      required: [true, "Judul artikel wajib diisi."],
-      trim: true,
-    },
-    IsiArtikel: {
-      type: String,
-      required: [true, "Isi artikel wajib diisi."],
-    },
-    ImageUrl: {
-      type: String,
-      trim: true,
-      default: null,
-      validate: {
-        validator: function (v) {
-          // Validasi URL gambar sederhana
-          return !v || /^https?:\/\/.+\.(jpg|jpeg|png|webp|gif)$/i.test(v);
-        },
-        message: (props) => `${props.value} bukan URL gambar yang valid.`,
-      },
+const Article = sequelize.define('Article', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  judulArtikel: {
+    type: DataTypes.STRING(500),
+    allowNull: false,
+    field: 'judul_artikel',
+    validate: {
+      notEmpty: { msg: 'Judul artikel wajib diisi.' },
     },
   },
-  {
-    timestamps: true, // otomatis tambahkan createdAt & updatedAt
-    versionKey: false,
-    collection: "artikels",
-  }
-);
-
-articleSchema.index({ JudulArtikel: "text" });
-
-articleSchema.methods = {
-  async updateArtikel(data) {
-    Object.assign(this, data);
-    return this.save();
+  isiArtikel: {
+    type: DataTypes.TEXT('long'),
+    allowNull: false,
+    field: 'isi_artikel',
+    validate: {
+      notEmpty: { msg: 'Isi artikel wajib diisi.' },
+    },
   },
-  async deleteArtikel() {
-    return this.deleteOne();
+  imageUrl: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    defaultValue: null,
+    field: 'image_url',
+    validate: {
+      isUrl: { msg: 'URL gambar tidak valid.' },
+    },
   },
-};
-
-// Middleware logging
-articleSchema.pre("save", function (next) {
-  console.log(`[Artikel] "${this.JudulArtikel}" akan disimpan.`);
-  next();
+}, {
+  tableName: 'articles',
+  timestamps: true,
+  indexes: [
+    { fields: ['judul_artikel'] },
+  ],
 });
-
-const Article = mongoose.models.Article || mongoose.model("Article", articleSchema);
 
 export default Article;

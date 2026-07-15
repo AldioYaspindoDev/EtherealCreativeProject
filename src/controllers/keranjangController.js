@@ -1,325 +1,287 @@
-import mongoose from "mongoose";
-import Cart from "../models/keranjangModel.js";
-import Catalog from "../models/catalogModel.js";
-import AppError from "../utils/AppError.js";
-import { catchAsync } from "../middleware/errorHandler.js";
+// controllers/keranjangController.js
+import Cart, { CartItem } from '../models/keranjangModel.js';
+import Catalog, { CatalogVariant, VariantImage } from '../models/catalogModel.js';
+import AppError from '../utils/AppError.js';
+import { catchAsync } from '../middleware/errorHandler.js';
+import sequelize from '../config/sequelize.js';
 
 const KeranjangController = {
-  // ADD TO CART with Stock Management
+  // ─── ADD TO CART ─────────────────────────────────────────────────────────────
   addToCart: catchAsync(async (req, res, next) => {
-    const { productId, quantity } = req.body;
-    const userId = req.user._id; // ✅ From JWT token, NOT from request body/params!
+    const { productId, variantId, selectedColor, selectedSize, quantity } = req.body;
+    const userId = req.user.id;
+
+    if (!productId || !variantId || !selectedColor || !selectedSize) {
+      return next(new AppError('productId, variantId, selectedColor, dan selectedSize wajib diisi', 400));
+    }
 
     const qtyToAdd = quantity || 1;
 
-    // Start database transaction
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
+    const t = await sequelize.transaction();
     try {
-      // Find product with session
-      const product = await Catalog.findById(productId).session(session);
+      const product = await Catalog.findByPk(productId, { transaction: t });
+      if (!product) { await t.rollback(); return next(new AppError('Produk tidak ditemukan', 404)); }
+      if (!product.isActive) { await t.rollback(); return next(new AppError('Produk tidak tersedia', 400)); }
 
-      if (!product) {
-        await session.abortTransaction();
-        return next(new AppError('Produk tidak ditemukan', 404));
-      }
+      const variant = await CatalogVariant.findOne({
+        where: { id: variantId, catalogId: productId },
+        include: [{ model: VariantImage, as: 'productImages' }],
+        transaction: t,
+      });
+      if (!variant) { await t.rollback(); return next(new AppError('Variant tidak ditemukan', 404)); }
 
-      if (!product.isActive) {
-        await session.abortTransaction();
-        return next(new AppError('Produk tidak tersedia', 400));
-      }
+      // Pastikan sizes selalu berupa array (MySQL JSON column kadang dikembalikan sebagai string)
+      const parsedSizes = Array.isArray(variant.sizes)
+        ? variant.sizes
+        : (() => { try { return JSON.parse(variant.sizes || '[]'); } catch { return []; } })();
 
-      // Check stock availability
-      if (product.stock < qtyToAdd) {
-        await session.abortTransaction();
-        return next(
-          new AppError(
-            `Stok tidak mencukupi. Stok tersedia: ${product.stock}`,
-            400
-          )
-        );
-      }
+      if (variant.color !== selectedColor) { await t.rollback(); return next(new AppError(`Warna "${selectedColor}" tidak tersedia untuk variant ini`, 400)); }
+      if (!parsedSizes.includes(selectedSize)) { await t.rollback(); return next(new AppError(`Ukuran "${selectedSize}" tidak tersedia untuk variant ini. Pilihan: ${parsedSizes.join(', ')}`, 400)); }
+      if (variant.stock < qtyToAdd) { await t.rollback(); return next(new AppError(`Stok tidak mencukupi. Stok tersedia: ${variant.stock}`, 400)); }
 
-      // Validate price
-      if (typeof product.productPrice !== "number" || product.productPrice <= 0) {
-        await session.abortTransaction();
-        return next(new AppError('Data produk tidak valid', 500));
-      }
+      // Cari atau buat cart aktif
+      let [cart] = await Cart.findOrCreate({
+        where: { userId },
+        defaults: { userId, totalPrice: 0, status: 'active' },
+        transaction: t,
+      });
 
-      // Find active cart for this user
-      let cart = await Cart.findOne({
-        userId,
-        status: "active",
-      }).session(session);
+      // Cek apakah item sudah ada di cart
+      const existingItem = await CartItem.findOne({
+        where: { cartId: cart.id, productId, variantId, selectedColor, selectedSize },
+        transaction: t,
+      });
 
-      // Create new cart if doesn't exist
-      if (!cart) {
-        cart = new Cart({
-          userId,
-          items: [],
-          status: "active",
-        });
-      }
-
-      // Check if product already in cart
-      const existingItemIndex = cart.items.findIndex(
-        (item) => item.product.toString() === productId
-      );
-
-      if (existingItemIndex > -1) {
-        const existingItem = cart.items[existingItemIndex];
+      if (existingItem) {
         const newQuantity = existingItem.quantity + qtyToAdd;
-
-        // Check total stock needed
-        if (product.stock < newQuantity) {
-          await session.abortTransaction();
-          return next(
-            new AppError(
-              `Stok tidak mencukupi. Anda sudah memiliki ${existingItem.quantity} item di keranjang. Stok tersedia: ${product.stock}`,
-              400
-            )
-          );
+        if (variant.stock < qtyToAdd) {
+          await t.rollback();
+          return next(new AppError(`Stok tidak mencukupi. Anda sudah memiliki ${existingItem.quantity} item di keranjang. Stok tersedia: ${variant.stock}`, 400));
         }
-
-        existingItem.quantity = newQuantity;
+        await existingItem.update({ quantity: newQuantity }, { transaction: t });
       } else {
-        cart.items.push({ product: productId, quantity: qtyToAdd });
+        await CartItem.create({ cartId: cart.id, productId, variantId, selectedColor, selectedSize, quantity: qtyToAdd }, { transaction: t });
       }
 
-      // Update product stock
-      product.stock -= qtyToAdd;
-      await product.save({ session });
+      // Kurangi stok variant
+      await variant.update({ stock: variant.stock - qtyToAdd }, { transaction: t });
 
-      // Calculate total price
-      await cart.populate("items.product");
-      cart.totalPrice = cart.items.reduce((total, item) => {
-        return total + item.product.productPrice * item.quantity;
+      // Hitung ulang total price
+      const allItems = await CartItem.findAll({
+        where: { cartId: cart.id },
+        include: [{ model: CatalogVariant, as: 'variant' }],
+        transaction: t,
+      });
+
+      const totalPrice = allItems.reduce((sum, itm) => {
+        const price = itm.variant ? parseFloat(itm.variant.productPrice) : 0;
+        return sum + price * itm.quantity;
       }, 0);
 
-      await cart.save({ session });
+      await cart.update({ totalPrice }, { transaction: t });
+      await t.commit();
 
-      // Commit transaction
-      await session.commitTransaction();
-
-      res.status(200).json({
-        success: true,
-        message: "Produk berhasil ditambahkan ke keranjang",
-        cart,
+      // Return cart dengan semua relasi
+      const fullCart = await Cart.findByPk(cart.id, {
+        include: [{
+          model: CartItem, as: 'items',
+          include: [
+            { model: Catalog, as: 'product' },
+            { model: CatalogVariant, as: 'variant', include: [{ model: VariantImage, as: 'productImages' }] },
+          ],
+        }],
       });
+
+      res.status(200).json({ success: true, message: 'Produk berhasil ditambahkan ke keranjang', cart: fullCart });
     } catch (err) {
-      await session.abortTransaction();
+      await t.rollback();
       throw err;
-    } finally {
-      session.endSession();
     }
   }),
 
-  // GET CART - Only for authenticated user
+  // ─── GET CART ─────────────────────────────────────────────────────────────────
   getCart: catchAsync(async (req, res, next) => {
-    const userId = req.user._id; // ✅ From JWT token
+    const userId = req.user.id;
 
-    const cart = await Cart.findOne({ userId, status: "active" }).populate(
-      "items.product"
-    );
+    const cart = await Cart.findOne({
+      where: { userId },
+      include: [{
+        model: CartItem, as: 'items',
+        include: [
+          { model: Catalog, as: 'product' },
+          { model: CatalogVariant, as: 'variant', include: [{ model: VariantImage, as: 'productImages' }] },
+        ],
+      }],
+    });
 
     if (!cart) {
-      return res.status(200).json({
-        success: true,
-        cart: { items: [], totalPrice: 0 },
-      });
+      return res.status(200).json({ success: true, cart: { items: [], totalPrice: 0 } });
     }
+
+    const enrichedItems = cart.items.map(item => ({
+      id: item.id,
+      product: item.product,
+      variantId: item.variantId,
+      selectedColor: item.selectedColor,
+      selectedSize: item.selectedSize,
+      quantity: item.quantity,
+      variantDetails: item.variant ? {
+        productPrice: item.variant.productPrice,
+        stock: item.variant.stock,
+        productImages: item.variant.productImages,
+      } : null,
+    }));
 
     res.status(200).json({
       success: true,
-      cart,
+      cart: { id: cart.id, userId: cart.userId, items: enrichedItems, totalPrice: cart.totalPrice, status: cart.status },
     });
   }),
 
-  // UPDATE CART ITEM with Stock Management
+  // ─── UPDATE CART ITEM ─────────────────────────────────────────────────────────
   updateCartItem: catchAsync(async (req, res, next) => {
-    const userId = req.user._id; // ✅ From JWT token
+    const userId = req.user.id;
     const { itemId, quantity } = req.body;
+    if (!itemId) return next(new AppError('Item ID harus disertakan', 400));
 
-    if (!itemId) {
-      return next(new AppError('Item ID harus disertakan', 400));
-    }
-
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
+    const t = await sequelize.transaction();
     try {
-      const cart = await Cart.findOne({ userId, status: "active" })
-        .populate('items.product')
-        .session(session);
+      const cart = await Cart.findOne({ where: { userId }, transaction: t });
+      if (!cart) { await t.rollback(); return next(new AppError('Keranjang tidak ditemukan', 404)); }
 
-      if (!cart) {
-        await session.abortTransaction();
-        return next(new AppError('Keranjang tidak ditemukan', 404));
-      }
+      const item = await CartItem.findOne({ where: { id: itemId, cartId: cart.id }, transaction: t });
+      if (!item) { await t.rollback(); return next(new AppError('Item tidak ditemukan di keranjang', 404)); }
 
-      const item = cart.items.id(itemId);
-      if (!item) {
-        await session.abortTransaction();
-        return next(new AppError('Item tidak ditemukan di keranjang', 404));
-      }
-
-      const product = await Catalog.findById(item.product._id).session(session);
-      if (!product) {
-        await session.abortTransaction();
-        return next(new AppError('Produk tidak ditemukan', 404));
-      }
+      const variant = await CatalogVariant.findByPk(item.variantId, { transaction: t });
+      if (!variant) { await t.rollback(); return next(new AppError('Variant tidak ditemukan', 404)); }
 
       const oldQuantity = item.quantity;
       const quantityDiff = quantity - oldQuantity;
 
-      // If increasing quantity, check stock
-      if (quantityDiff > 0) {
-        if (product.stock < quantityDiff) {
-          await session.abortTransaction();
-          return next(
-            new AppError(
-              `Stok tidak mencukupi. Stok tersedia: ${product.stock}`,
-              400
-            )
-          );
-        }
-        product.stock -= quantityDiff;
-      } else {
-        // Return stock if decreasing
-        product.stock += Math.abs(quantityDiff);
+      if (quantityDiff > 0 && variant.stock < quantityDiff) {
+        await t.rollback();
+        return next(new AppError(`Stok tidak mencukupi. Stok tersedia: ${variant.stock}`, 400));
       }
 
-      await product.save({ session });
+      await variant.update({ stock: variant.stock - quantityDiff }, { transaction: t });
 
-      // Update or remove item
       if (quantity <= 0) {
-        cart.items.pull(item);
+        await item.destroy({ transaction: t });
       } else {
-        item.quantity = quantity;
+        await item.update({ quantity }, { transaction: t });
       }
 
       // Recalculate total
-      cart.totalPrice = cart.items.reduce((total, item) => {
-        return total + (item.product?.productPrice || 0) * item.quantity;
-      }, 0);
-
-      await cart.save({ session });
-      await session.commitTransaction();
-
-      return res.status(200).json({
-        success: true,
-        message: "Keranjang berhasil diperbarui",
-        cart,
+      const allItems = await CartItem.findAll({
+        where: { cartId: cart.id },
+        include: [{ model: CatalogVariant, as: 'variant' }],
+        transaction: t,
       });
+      const totalPrice = allItems.reduce((sum, i) => {
+        const price = i.variant ? parseFloat(i.variant.productPrice) : 0;
+        return sum + price * i.quantity;
+      }, 0);
+      await cart.update({ totalPrice }, { transaction: t });
+
+      await t.commit();
+
+      const fullCart = await Cart.findByPk(cart.id, {
+        include: [{
+          model: CartItem, as: 'items',
+          include: [
+            { model: Catalog, as: 'product' },
+            { model: CatalogVariant, as: 'variant', include: [{ model: VariantImage, as: 'productImages' }] },
+          ],
+        }],
+      });
+
+      return res.status(200).json({ success: true, message: 'Keranjang berhasil diperbarui', cart: fullCart });
     } catch (err) {
-      await session.abortTransaction();
+      await t.rollback();
       throw err;
-    } finally {
-      session.endSession();
     }
   }),
 
-  // REMOVE CART ITEM with Stock Return
+  // ─── REMOVE CART ITEM ─────────────────────────────────────────────────────────
   removeCartItem: catchAsync(async (req, res, next) => {
-    const userId = req.user._id; // ✅ From JWT token, NOT from params!
+    const userId = req.user.id;
     const { itemId } = req.params;
 
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
+    const t = await sequelize.transaction();
     try {
-      const cart = await Cart.findOne({ userId, status: "active" })
-        .populate('items.product')
-        .session(session);
+      const cart = await Cart.findOne({ where: { userId }, transaction: t });
+      if (!cart) { await t.rollback(); return next(new AppError('Keranjang tidak ditemukan', 404)); }
 
-      if (!cart) {
-        await session.abortTransaction();
-        return next(new AppError('Keranjang tidak ditemukan', 404));
-      }
+      const item = await CartItem.findOne({ where: { id: itemId, cartId: cart.id }, transaction: t });
+      if (!item) { await t.rollback(); return next(new AppError('Item tidak ditemukan di keranjang', 404)); }
 
-      const itemToRemove = cart.items.id(itemId);
+      // Kembalikan stok
+      const variant = await CatalogVariant.findByPk(item.variantId, { transaction: t });
+      if (variant) await variant.update({ stock: variant.stock + item.quantity }, { transaction: t });
 
-      if (!itemToRemove) {
-        await session.abortTransaction();
-        return next(new AppError('Item tidak ditemukan di keranjang', 404));
-      }
-
-      // Return stock to product
-      const product = await Catalog.findById(itemToRemove.product._id).session(session);
-      if (product) {
-        product.stock += itemToRemove.quantity;
-        await product.save({ session });
-      }
-
-      // Remove item
-      cart.items.pull(itemToRemove);
+      await item.destroy({ transaction: t });
 
       // Recalculate total
-      cart.totalPrice = cart.items.reduce((total, item) => {
-        return total + item.product.productPrice * item.quantity;
-      }, 0);
-
-      await cart.save({ session });
-      await session.commitTransaction();
-
-      res.status(200).json({
-        success: true,
-        message: "Item berhasil dihapus dari keranjang",
-        cart,
+      const allItems = await CartItem.findAll({
+        where: { cartId: cart.id },
+        include: [{ model: CatalogVariant, as: 'variant' }],
+        transaction: t,
       });
+      const totalPrice = allItems.reduce((sum, i) => {
+        const price = i.variant ? parseFloat(i.variant.productPrice) : 0;
+        return sum + price * i.quantity;
+      }, 0);
+      await cart.update({ totalPrice }, { transaction: t });
+
+      await t.commit();
+
+      const fullCart = await Cart.findByPk(cart.id, {
+        include: [{
+          model: CartItem, as: 'items',
+          include: [
+            { model: Catalog, as: 'product' },
+            { model: CatalogVariant, as: 'variant', include: [{ model: VariantImage, as: 'productImages' }] },
+          ],
+        }],
+      });
+
+      res.status(200).json({ success: true, message: 'Item berhasil dihapus dari keranjang', cart: fullCart });
     } catch (err) {
-      await session.abortTransaction();
+      await t.rollback();
       throw err;
-    } finally {
-      session.endSession();
     }
   }),
 
-  // CLEAR CART (optional)
+  // ─── CLEAR CART ───────────────────────────────────────────────────────────────
   clearCart: catchAsync(async (req, res, next) => {
-    const userId = req.user._id;
-
-    const session = await mongoose.startSession();
-    session.startTransaction();
-
+    const userId = req.user.id;
+    const t = await sequelize.transaction();
     try {
-      const cart = await Cart.findOne({ userId, status: "active" })
-        .populate('items.product')
-        .session(session);
+      const cart = await Cart.findOne({
+        where: { userId },
+        include: [{ model: CartItem, as: 'items' }],
+        transaction: t,
+      });
 
       if (!cart) {
-        await session.abortTransaction();
-        return res.status(200).json({
-          success: true,
-          message: "Keranjang sudah kosong",
-        });
+        await t.commit();
+        return res.status(200).json({ success: true, message: 'Keranjang sudah kosong' });
       }
 
-      // Return all stock
+      // Kembalikan semua stok
       for (const item of cart.items) {
-        const product = await Catalog.findById(item.product._id).session(session);
-        if (product) {
-          product.stock += item.quantity;
-          await product.save({ session });
-        }
+        const variant = await CatalogVariant.findByPk(item.variantId, { transaction: t });
+        if (variant) await variant.update({ stock: variant.stock + item.quantity }, { transaction: t });
       }
 
-      cart.items = [];
-      cart.totalPrice = 0;
-      await cart.save({ session });
+      await CartItem.destroy({ where: { cartId: cart.id }, transaction: t });
+      await cart.update({ totalPrice: 0 }, { transaction: t });
 
-      await session.commitTransaction();
-
-      res.status(200).json({
-        success: true,
-        message: "Keranjang berhasil dikosongkan",
-      });
+      await t.commit();
+      res.status(200).json({ success: true, message: 'Keranjang berhasil dikosongkan' });
     } catch (err) {
-      await session.abortTransaction();
+      await t.rollback();
       throw err;
-    } finally {
-      session.endSession();
     }
   }),
 };

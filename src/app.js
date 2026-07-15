@@ -27,19 +27,20 @@ app.set("trust proxy", 1);
 // SECURITY MIDDLEWARE
 // ========================================
 
-// 1. Helmet - Secure HTTP headers
+// 1. Helmet - Secure HTTP headers (TEMPORARILY DISABLED FOR DEBUGGING)
 app.use(
   helmet({
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+    crossOriginEmbedderPolicy: false,
     contentSecurityPolicy: {
       directives: {
         defaultSrc: ["'self'"],
         scriptSrc: ["'self'", "'unsafe-inline'"],
         styleSrc: ["'self'", "'unsafe-inline'"],
-        imgSrc: ["'self'", "data:", "https:", "res.cloudinary.com"],
+        imgSrc: ["'self'", "data:", "https:", "http:", "http://localhost:5000", "res.cloudinary.com"],
         connectSrc: [
           "'self'",
           "http://localhost:3000",
-          "http://localhost:5173",
           process.env.CLIENT_URL,
         ],
         fontSrc: ["'self'"],
@@ -51,7 +52,7 @@ app.use(
     frameguard: { action: "deny" },
     xssFilter: true,
     noSniff: true,
-  })
+  }),
 );
 
 // ========================================
@@ -62,14 +63,14 @@ app.use(
 app.use(cookieParser());
 
 // CORS Configuration
-const FRONTEND_URL = process.env.CLIENT_URL || "http://localhost:3000";
+const FRONTEND_URL = (process.env.CLIENT_URL || "http://localhost:3000").trim();
 
-// Build allowed origins list
+// Build allowed origins list and normalize them (remove trailing slash if any)
 const allowedOrigins = [
-  "http://localhost:3000",
-  "http://127.0.0.1:3000",
+  "http://localhost:3000", // Vite default
   FRONTEND_URL,
-].filter((origin, index, self) => self.indexOf(origin) === index);
+].map(url => url.replace(/\/$/, ""))
+ .filter((origin, index, self) => self.indexOf(origin) === index);
 
 const corsOptions = {
   origin: function (origin, callback) {
@@ -79,7 +80,10 @@ const corsOptions = {
       return callback(null, true);
     }
 
-    if (allowedOrigins.includes(origin)) {
+    // Normalize origin from browser (remove trailing slash)
+    const normalizedOrigin = origin.replace(/\/$/, "");
+
+    if (allowedOrigins.includes(normalizedOrigin)) {
       console.log(`CORS: ${origin} - ALLOWED`);
       callback(null, true);
     } else {
@@ -110,6 +114,9 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
+// Serve Static Files
+app.use("/uploads", express.static("public/uploads"));
+
 // ========================================
 // RATE LIMITING & SECURITY
 // ========================================
@@ -117,7 +124,7 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // 2. Rate Limiting - General
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 100,
+  max: 1000, // Relaxed for testing
   message: {
     success: false,
     message: "Terlalu banyak request dari IP ini, coba lagi dalam 15 menit",
@@ -126,7 +133,7 @@ const limiter = rateLimit({
   legacyHeaders: false,
   skip: (req) => {
     if (process.env.NODE_ENV === "development") {
-      return req.ip === "127.0.0.1" || req.ip === "::1";
+      return true; // Skip completely in development to avoid testing issues
     }
     return false;
   },
@@ -135,7 +142,7 @@ const limiter = rateLimit({
 // 3. Rate Limiting - Auth (Stricter)
 const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 5,
+  max: 50, // Relaxed for testing
   skipSuccessfulRequests: true,
   message: {
     success: false,
@@ -146,7 +153,7 @@ const authLimiter = rateLimit({
 // 4. Rate Limiting - Sensitive APIs
 const strictLimiter = rateLimit({
   windowMs: 60 * 60 * 1000,
-  max: 10,
+  max: 50, // Relaxed for testing
   message: {
     success: false,
     message: "Limit tercapai, coba lagi dalam 1 jam",
@@ -156,9 +163,10 @@ const strictLimiter = rateLimit({
 // 5. Speed Limiter
 const speedLimiter = slowDown({
   windowMs: 15 * 60 * 1000,
-  delayAfter: 50,
+  delayAfter: 500, // Relaxed for testing
   delayMs: (hits) => hits * 100,
   maxDelayMs: 5000,
+  skip: (req) => process.env.NODE_ENV === "development", // Skip in dev to avoid lag
 });
 
 // Apply global rate limiting

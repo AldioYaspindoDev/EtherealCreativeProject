@@ -1,160 +1,196 @@
-import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
+// src/models/userCustomerModel.js
+import { DataTypes, Op } from 'sequelize';
+import bcrypt from 'bcryptjs';
+import sequelize from '../config/sequelize.js';
 
-const UserCustomerSchema = new mongoose.Schema(
-  {
-    username: {
-      type: String,
-      required: [true, "Username is required."],
-      unique: true,
-      trim: true,
-      lowercase: true,
-    },
-    password: {
-      type: String,
-      required: [true, "Password is required."],
-      minlength: [8, "Password must be at least 8 characters long."],
-      select: false, // Don't include password by default
-    },
-    nomorhp: {
-      type: String,
-      required: [true, "Nomor HP is required."],
-      unique: true,
-      trim: true,
-    },
-    role: {
-      type: String,
-      default: "customer",
-    },
-    // 🔒 Account Security Fields
-    loginAttempts: {
-      type: Number,
-      default: 0,
-    },
-    lockUntil: {
-      type: Date,
-    },
-    passwordChangedAt: Date,
-    passwordResetToken: String,
-    passwordResetExpires: Date,
-    // Refresh token tracking
-    refreshTokens: [{
-      token: String,
-      createdAt: { type: Date, default: Date.now },
-      expiresAt: Date,
-    }],
+// ─── UserCustomer ─────────────────────────────────────────────────────────────
+const UserCustomer = sequelize.define('UserCustomer', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
   },
-  {
-    timestamps: true,
-  }
-);
-
-// 🔒 Virtual for checking if account is locked
-UserCustomerSchema.virtual('isLocked').get(function () {
-  return !!(this.lockUntil && this.lockUntil > Date.now());
+  username: {
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    unique: true,
+    validate: {
+      notEmpty: { msg: 'Username is required.' },
+    },
+    set(value) {
+      this.setDataValue('username', value?.trim().toLowerCase());
+    },
+  },
+  password: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    validate: {
+      len: { args: [8, 255], msg: 'Password must be at least 8 characters long.' },
+    },
+  },
+  nomorhp: {
+    type: DataTypes.STRING(20),
+    allowNull: false,
+    unique: true,
+    field: 'nomorhp',
+    validate: {
+      notEmpty: { msg: 'Nomor HP is required.' },
+    },
+    set(value) {
+      this.setDataValue('nomorhp', value?.trim());
+    },
+  },
+  role: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    defaultValue: 'customer',
+  },
+  loginAttempts: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    defaultValue: 0,
+    field: 'login_attempts',
+  },
+  lockUntil: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'lock_until',
+  },
+  passwordChangedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'password_changed_at',
+  },
+  passwordResetToken: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    field: 'password_reset_token',
+  },
+  passwordResetExpires: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'password_reset_expires',
+  },
+}, {
+  tableName: 'user_customers',
+  timestamps: true,
+  defaultScope: {
+    attributes: { exclude: ['password'] },
+  },
+  scopes: {
+    withPassword: { attributes: {} },
+  },
 });
 
-// Hash password before save
-UserCustomerSchema.pre('save', async function (next) {
-  if (!this.isModified('password')) return next();
-
-  const salt = await bcrypt.genSalt(12);
-  this.password = await bcrypt.hash(this.password, salt);
-  
-  // Set passwordChangedAt when password is modified (but not on creation)
-  if (!this.isNew) {
-    this.passwordChangedAt = Date.now() - 1000; // Subtract 1 sec for token timing
-  }
-  
-  next();
+// ─── UserToken (replaces refreshTokens array) ─────────────────────────────────
+export const UserToken = sequelize.define('UserToken', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  userId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    field: 'user_id',
+  },
+  token: {
+    type: DataTypes.TEXT,
+    allowNull: false,
+  },
+  expiresAt: {
+    type: DataTypes.DATE,
+    allowNull: false,
+    field: 'expires_at',
+  },
+}, {
+  tableName: 'user_tokens',
+  timestamps: true,
+  updatedAt: false,
 });
 
-// Compare password
-UserCustomerSchema.methods.comparePassword = async function (candidatePassword) {
-  return await bcrypt.compare(candidatePassword, this.password);
+// ─── Associations ─────────────────────────────────────────────────────────────
+UserCustomer.hasMany(UserToken, { foreignKey: 'userId', as: 'tokens', onDelete: 'CASCADE' });
+UserToken.belongsTo(UserCustomer, { foreignKey: 'userId' });
+
+// ─── Hooks ────────────────────────────────────────────────────────────────────
+UserCustomer.beforeSave(async (user) => {
+  if (user.changed('password')) {
+    const salt = await bcrypt.genSalt(12);
+    user.password = await bcrypt.hash(user.password, salt);
+
+    if (!user.isNewRecord) {
+      user.passwordChangedAt = new Date(Date.now() - 1000);
+    }
+  }
+});
+
+// ─── Instance Methods ─────────────────────────────────────────────────────────
+UserCustomer.prototype.comparePassword = async function (candidatePassword) {
+  return bcrypt.compare(candidatePassword, this.password);
 };
 
-// 🔒 Increment login attempts
-UserCustomerSchema.methods.incLoginAttempts = async function () {
-  // Reset if lock has expired
-  if (this.lockUntil && this.lockUntil < Date.now()) {
-    return this.updateOne({
-      $set: { loginAttempts: 1 },
-      $unset: { lockUntil: 1 },
-    });
-  }
+UserCustomer.prototype.isLocked = function () {
+  return !!(this.lockUntil && this.lockUntil > Date.now());
+};
 
-  const updates = { $inc: { loginAttempts: 1 } };
-
-  // Lock account after 5 failed attempts
-  const MAX_LOGIN_ATTEMPTS = 5;
+UserCustomer.prototype.incLoginAttempts = async function () {
+  const MAX_ATTEMPTS = 5;
   const LOCK_TIME = 2 * 60 * 60 * 1000; // 2 hours
 
-  if (this.loginAttempts + 1 >= MAX_LOGIN_ATTEMPTS && !this.isLocked) {
-    updates.$set = { lockUntil: Date.now() + LOCK_TIME };
+  if (this.lockUntil && this.lockUntil < Date.now()) {
+    await this.update({ loginAttempts: 1, lockUntil: null });
+    return;
   }
 
-  return this.updateOne(updates);
+  const newAttempts = this.loginAttempts + 1;
+  const updates = { loginAttempts: newAttempts };
+
+  if (newAttempts >= MAX_ATTEMPTS && !this.isLocked()) {
+    updates.lockUntil = new Date(Date.now() + LOCK_TIME);
+  }
+
+  await this.update(updates);
 };
 
-// 🔒 Reset login attempts on successful login
-UserCustomerSchema.methods.resetLoginAttempts = async function () {
+UserCustomer.prototype.resetLoginAttempts = async function () {
   if (this.loginAttempts === 0 && !this.lockUntil) return;
-
-  return this.updateOne({
-    $set: { loginAttempts: 0 },
-    $unset: { lockUntil: 1 },
-  });
+  await this.update({ loginAttempts: 0, lockUntil: null });
 };
 
-// Check if password was changed after JWT was issued
-UserCustomerSchema.methods.changedPasswordAfter = function (JWTTimestamp) {
+UserCustomer.prototype.changedPasswordAfter = function (JWTTimestamp) {
   if (this.passwordChangedAt) {
-    const changedTimestamp = parseInt(
-      this.passwordChangedAt.getTime() / 1000,
-      10
-    );
+    const changedTimestamp = parseInt(this.passwordChangedAt.getTime() / 1000, 10);
     return JWTTimestamp < changedTimestamp;
   }
   return false;
 };
 
-// Add refresh token
-UserCustomerSchema.methods.addRefreshToken = async function (token) {
+UserCustomer.prototype.addRefreshToken = async function (token) {
   const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
-  
-  this.refreshTokens.push({
-    token,
-    expiresAt,
+  await UserToken.create({ userId: this.id, token, expiresAt });
+
+  // Simpan maksimal 5 token terakhir per user
+  const allTokens = await UserToken.findAll({
+    where: { userId: this.id },
+    order: [['id', 'ASC']],
   });
-
-  // Keep only last 5 refresh tokens
-  if (this.refreshTokens.length > 5) {
-    this.refreshTokens = this.refreshTokens.slice(-5);
+  if (allTokens.length > 5) {
+    const toDelete = allTokens.slice(0, allTokens.length - 5);
+    await UserToken.destroy({ where: { id: toDelete.map(t => t.id) } });
   }
-
-  await this.save();
 };
 
-// Remove refresh token
-UserCustomerSchema.methods.removeRefreshToken = async function (token) {
-  this.refreshTokens = this.refreshTokens.filter(rt => rt.token !== token);
-  await this.save();
+UserCustomer.prototype.removeRefreshToken = async function (token) {
+  await UserToken.destroy({ where: { userId: this.id, token } });
 };
 
-// Clean expired refresh tokens
-UserCustomerSchema.methods.cleanExpiredTokens = async function () {
-  this.refreshTokens = this.refreshTokens.filter(
-    rt => rt.expiresAt > Date.now()
-  );
-  await this.save();
+UserCustomer.prototype.cleanExpiredTokens = async function () {
+  await UserToken.destroy({
+    where: {
+      userId: this.id,
+      expiresAt: { [Op.lt]: new Date() },
+    },
+  });
 };
-
-// Indexes for performance
-UserCustomerSchema.index({ username: 1 });
-UserCustomerSchema.index({ nomorhp: 1 });
-UserCustomerSchema.index({ lockUntil: 1 });
-
-const UserCustomer = mongoose.model("UserCustomer", UserCustomerSchema);
 
 export default UserCustomer;

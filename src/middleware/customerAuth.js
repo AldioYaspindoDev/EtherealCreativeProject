@@ -6,16 +6,13 @@ import { catchAsync } from "./errorHandler.js";
 export const customerAuth = catchAsync(async (req, res, next) => {
   let token = null;
 
-  // 1. Try to get token from cookie (priority)
   if (req.cookies?.token) {
     token = req.cookies.token;
   }
-  // 2. Fallback: Get from Authorization header
   else if (req.headers.authorization?.startsWith("Bearer ")) {
     token = req.headers.authorization.replace("Bearer ", "");
   }
 
-  // 3. No token found
   if (!token) {
     return next(
       new AppError(
@@ -25,7 +22,6 @@ export const customerAuth = catchAsync(async (req, res, next) => {
     );
   }
 
-  // 4. Verify token
   let decoded;
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -44,8 +40,8 @@ export const customerAuth = catchAsync(async (req, res, next) => {
     return next(new AppError('Invalid token type', 401));
   }
 
-  // 6. Find user in database
-  const customer = await UserCustomer.findById(decoded.id).select('-password');
+  // 6. Find user in database (defaultScope sudah exclude password)
+  const customer = await UserCustomer.findByPk(decoded.id);
 
   if (!customer) {
     return next(

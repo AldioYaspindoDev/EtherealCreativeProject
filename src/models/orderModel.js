@@ -1,113 +1,151 @@
-import mongoose from "mongoose";
+// src/models/orderModel.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/sequelize.js';
 
-const orderSchema = new mongoose.Schema(
-  {
-    // Relasi ke User Customer (jika user sudah login)
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "UserCustomer",
-      required: false, // Opsional, untuk guest checkout
-    },
-
-    // Data pelanggan (auto-fill dari user login atau manual input)
-    customerName: {
-      type: String,
-      required: [true, "Nama pelanggan wajib diisi."],
-      trim: true,
-    },
-
-    customerPhone: {
-      type: String,
-      required: [true, "Nomor telepon wajib diisi."],
-      trim: true,
-    },
-
-    // Tipe order: 'registered' (user login) atau 'guest' (tanpa login)
-    orderType: {
-      type: String,
-      enum: ["registered", "guest"],
-      default: "guest",
-    },
-
-    // Detail produk yang dipesan
-    items: [
-      {
-        productId: {
-          type: mongoose.Schema.Types.ObjectId,
-          ref: "Catalog",
-          required: true,
-        },
-        productName: {
-          type: String,
-          required: true,
-        },
-        productPrice: {
-          type: Number,
-          required: true,
-        },
-        productImage: {
-          url: String,
-          publicId: String,
-        },
-        selectedColor: {
-          type: String,
-          required: true,
-        },
-        selectedSize: {
-          type: String,
-          required: true,
-        },
-        quantity: {
-          type: Number,
-          required: true,
-          min: 1,
-          default: 1,
-        },
-        subtotal: {
-          type: Number,
-          required: true,
-        },
-      },
-    ],
-
-    // Total harga
-    totalAmount: {
-      type: Number,
-      required: true,
-      min: 0,
-    },
-
-    // Status pemesanan
-    status: {
-      type: String,
-      enum: ["pending", "verified", "cancelled", "completed"],
-      default: "pending",
-    },
-
-    // Timestamp verifikasi/pembatalan
-    verifiedAt: {
-      type: Date,
-    },
-
-    cancelledAt: {
-      type: Date,
+// ─── Order ────────────────────────────────────────────────────────────────────
+const Order = sequelize.define('Order', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  userId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: true,      // Opsional — untuk guest checkout
+    field: 'user_id',
+  },
+  customerName: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    field: 'customer_name',
+    validate: {
+      notEmpty: { msg: 'Nama pelanggan wajib diisi.' },
     },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-    collection: "orders",
-  }
-);
+  customerPhone: {
+    type: DataTypes.STRING(30),
+    allowNull: false,
+    field: 'customer_phone',
+    validate: {
+      notEmpty: { msg: 'Nomor telepon wajib diisi.' },
+    },
+  },
+  orderType: {
+    type: DataTypes.ENUM('registered', 'guest'),
+    defaultValue: 'guest',
+    field: 'order_type',
+  },
+  totalAmount: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0,
+    field: 'total_amount',
+    validate: {
+      min: { args: [0], msg: 'Total amount tidak boleh negatif.' },
+    },
+  },
+  status: {
+    type: DataTypes.ENUM('pending', 'verified', 'cancelled', 'completed'),
+    defaultValue: 'pending',
+  },
+  verifiedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'verified_at',
+  },
+  cancelledAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'cancelled_at',
+  },
+  completedAt: {
+    type: DataTypes.DATE,
+    allowNull: true,
+    field: 'completed_at',
+  },
+}, {
+  tableName: 'orders',
+  timestamps: true,
+  indexes: [
+    { fields: ['status'] },
+    { fields: ['customer_phone'] },
+    { fields: ['created_at'] },
+    { fields: ['user_id'] },
+    { fields: ['order_type'] },
+  ],
+});
 
-// INDEX
-orderSchema.index({ status: 1 });
-orderSchema.index({ customerPhone: 1 });
-orderSchema.index({ createdAt: -1 });
-orderSchema.index({ "items.productId": 1 });
-orderSchema.index({ userId: 1 }); // Index untuk user yang login
-orderSchema.index({ orderType: 1 });
+// ─── OrderItem ────────────────────────────────────────────────────────────────
+export const OrderItem = sequelize.define('OrderItem', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  orderId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    field: 'order_id',
+  },
+  productId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: true,      // Simpan ID produk saat order dibuat; produk bisa dihapus belakangan
+    field: 'product_id',
+  },
+  productName: {
+    type: DataTypes.STRING(255),
+    allowNull: false,
+    field: 'product_name',
+  },
+  productPrice: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    field: 'product_price',
+  },
+  productImageUrl: {
+    type: DataTypes.STRING(500),
+    allowNull: true,
+    field: 'product_image_url',
+  },
+  productImagePublicId: {
+    type: DataTypes.STRING(255),
+    allowNull: true,
+    field: 'product_image_public_id',
+  },
+  selectedColor: {
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    field: 'selected_color',
+  },
+  selectedSize: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    field: 'selected_size',
+  },
+  quantity: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    defaultValue: 1,
+    validate: {
+      min: { args: [1], msg: 'Quantity minimal 1.' },
+    },
+  },
+  subtotal: {
+    type: DataTypes.DECIMAL(15, 2),
+    allowNull: false,
+    defaultValue: 0,
+  },
+}, {
+  tableName: 'order_items',
+  timestamps: false,
+  indexes: [
+    { fields: ['order_id'] },
+    { fields: ['product_id'] },
+  ],
+});
 
-const Order = mongoose.model("Order", orderSchema);
+// ─── Associations ─────────────────────────────────────────────────────────────
+Order.hasMany(OrderItem, { foreignKey: 'orderId', as: 'items', onDelete: 'CASCADE' });
+OrderItem.belongsTo(Order, { foreignKey: 'orderId' });
 
 export default Order;

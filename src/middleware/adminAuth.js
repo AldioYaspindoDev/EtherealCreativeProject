@@ -1,4 +1,3 @@
-// middleware/adminAuth.js
 import jwt from "jsonwebtoken";
 import UserAdmin from "../models/userAdminModel.js";
 
@@ -13,7 +12,6 @@ export const adminAuth = async (req, res, next) => {
       });
     }
 
-    // Verifikasi token
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -30,8 +28,7 @@ export const adminAuth = async (req, res, next) => {
       });
     }
 
-    // Ambil data admin dari database
-    const admin = await UserAdmin.findById(decoded.id);
+    const admin = await UserAdmin.findByPk(decoded.id);
     if (!admin) {
       return res.status(401).json({
         success: false,

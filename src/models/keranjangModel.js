@@ -1,53 +1,95 @@
-import mongoose from "mongoose";
+// src/models/keranjangModel.js
+import { DataTypes } from 'sequelize';
+import sequelize from '../config/sequelize.js';
 
-const cartItemSchema = new mongoose.Schema(
-  {
-    _id: {
-      type: mongoose.Schema.Types.ObjectId,
-      default: () => new mongoose.Types.ObjectId(),
-    },
-    product: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "Catalog",
-      required: true,
-    },
-    quantity: {
-      type: Number,
-      required: true,
-      min: 1,
-      default: 1,
+// ─── Cart ─────────────────────────────────────────────────────────────────────
+const Cart = sequelize.define('Cart', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  userId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    unique: true,           // Satu user hanya boleh punya 1 cart aktif
+    field: 'user_id',
+  },
+  totalPrice: {
+    type: DataTypes.DECIMAL(15, 2),
+    defaultValue: 0,
+    field: 'total_price',
+  },
+  status: {
+    type: DataTypes.ENUM('active', 'checked_out'),
+    defaultValue: 'active',
+  },
+}, {
+  tableName: 'carts',
+  timestamps: true,
+  indexes: [
+    { fields: ['user_id', 'status'] },
+  ],
+});
+
+// ─── CartItem ─────────────────────────────────────────────────────────────────
+export const CartItem = sequelize.define('CartItem', {
+  id: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    autoIncrement: true,
+    primaryKey: true,
+  },
+  cartId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    field: 'cart_id',
+  },
+  productId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    field: 'product_id',
+  },
+  variantId: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    field: 'variant_id',
+  },
+  selectedColor: {
+    type: DataTypes.STRING(100),
+    allowNull: false,
+    field: 'selected_color',
+    validate: {
+      notEmpty: { msg: 'Warna harus dipilih.' },
     },
   },
-  { versionKey: false }
-);
-
-const cartSchema = new mongoose.Schema(
-  {
-    userId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "UserCustomer",
-      required: true, // WAJIB (hanya user login yang punya cart)
-    },
-    // HAPUS sessionId (tidak dipakai lagi)
-    items: [cartItemSchema],
-    totalPrice: {
-      type: Number,
-      default: 0,
-    },
-    status: {
-      type: String,
-      enum: ["active", "checked_out"],
-      default: "active",
+  selectedSize: {
+    type: DataTypes.STRING(50),
+    allowNull: false,
+    field: 'selected_size',
+    validate: {
+      notEmpty: { msg: 'Ukuran harus dipilih.' },
     },
   },
-  {
-    timestamps: true,
-    versionKey: false,
-    collection: "carts",
-  }
-);
+  quantity: {
+    type: DataTypes.INTEGER.UNSIGNED,
+    allowNull: false,
+    defaultValue: 1,
+    validate: {
+      min: { args: [1], msg: 'Quantity minimal 1.' },
+    },
+  },
+}, {
+  tableName: 'cart_items',
+  timestamps: false,
+  indexes: [
+    { fields: ['cart_id'] },
+    { fields: ['product_id'] },
+    { fields: ['variant_id'] },
+  ],
+});
 
-// ✅ Index untuk performa query
-cartSchema.index({ userId: 1, status: 1 });
+// ─── Associations ─────────────────────────────────────────────────────────────
+Cart.hasMany(CartItem, { foreignKey: 'cartId', as: 'items', onDelete: 'CASCADE' });
+CartItem.belongsTo(Cart, { foreignKey: 'cartId' });
 
-export default mongoose.model("Cart", cartSchema);
+export default Cart;
