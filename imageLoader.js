@@ -15,6 +15,11 @@ export default function customImageLoader({ src, width, quality }) {
     return src;
   }
 
+  // If the image is a local public asset, use Next.js native optimizer
+  if (src.startsWith("/") && !src.startsWith("//")) {
+    return `/_next/image?url=${encodeURIComponent(src)}&w=${width}&q=${quality || 75}`;
+  }
+
   // For other images, use Next.js default optimization
   return `${src}?w=${width}&q=${quality || 75}`;
 }
