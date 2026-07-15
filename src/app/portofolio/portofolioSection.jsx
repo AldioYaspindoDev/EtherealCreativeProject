@@ -4,9 +4,9 @@ import { useEffect, useState } from "react";
 import axios from "axios";
 import PortofolioCard from "./portofolioCard";
 
-export default function PortofolioSection() {
-  const [portofolios, setPortofolios] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function PortofolioSection({ initialData = [] }) {
+  const [portofolios, setPortofolios] = useState(initialData);
+  const [loading, setLoading] = useState(initialData.length === 0);
 
   // Implementasi Exponential Backoff sederhana untuk fetch API
   const fetchPortofolio = async (retries = 3) => {
@@ -38,8 +38,10 @@ export default function PortofolioSection() {
   };
 
   useEffect(() => {
-    fetchPortofolio();
-  }, []);
+    if (initialData.length === 0) {
+      fetchPortofolio();
+    }
+  }, [initialData]);
 
   if (loading) {
     return (

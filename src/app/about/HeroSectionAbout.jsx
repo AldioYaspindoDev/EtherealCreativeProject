@@ -13,6 +13,7 @@ export default function HeroSectionAbout() {
           alt="Ethereal Creative Store"
           fill
           className="object-cover"
+          sizes="100vw"
           priority
         />
 

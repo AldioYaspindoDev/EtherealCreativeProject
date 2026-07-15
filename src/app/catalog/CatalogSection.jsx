@@ -1,13 +1,14 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import axios from "axios";
 import CatalogCards from "./CatalogCards";
 
-const CatalogSection = () => {
-  const [catalogs, setCatalogs] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [pagination, setPagination] = useState(null);
+const CatalogSection = ({ initialData = [], initialPagination = null }) => {
+  const [catalogs, setCatalogs] = useState(initialData);
+  const [loading, setLoading] = useState(initialData.length === 0);
+  const [pagination, setPagination] = useState(initialPagination);
   const [loadingMore, setLoadingMore] = useState(false);
+  const hasFetched = useRef(false);
 
   const fetchCatalog = async (page = 1, append = false) => {
     try {
@@ -39,8 +40,11 @@ const CatalogSection = () => {
   };
 
   useEffect(() => {
-    fetchCatalog();
-  }, []);
+    if (initialData.length === 0 && !hasFetched.current) {
+      hasFetched.current = true;
+      fetchCatalog(1, false);
+    }
+  }, [initialData]);
 
   if (loading) {
     return (

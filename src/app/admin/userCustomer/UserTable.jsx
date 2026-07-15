@@ -19,7 +19,7 @@ export default function UserTable({ initialUsers }) {
           withCredentials: true,
         }
       );
-      setUsers((prev) => prev.filter((item) => item._id !== id));
+      setUsers((prev) => prev.filter((item) => item.id !== id));
       toast.success("User berhasil dihapus");
     } catch (error) {
       console.error("Gagal menghapus user:", error);
@@ -85,7 +85,7 @@ export default function UserTable({ initialUsers }) {
             ) : (
               filteredUsers.map((user, index) => (
                 <tr
-                  key={user._id}
+                  key={user.id}
                   className="hover:bg-blue-50/30 transition-colors"
                 >
                   <td className="px-6 py-4 text-sm text-gray-500">
@@ -100,7 +100,7 @@ export default function UserTable({ initialUsers }) {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end">
                       <button
-                        onClick={() => handleDelete(user._id)}
+                        onClick={() => handleDelete(user.id)}
                         className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                         title="Hapus"
                       >

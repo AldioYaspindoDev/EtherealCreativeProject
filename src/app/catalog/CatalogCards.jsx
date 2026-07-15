@@ -41,9 +41,9 @@ export default function CatalogCards({ item }) {
     <div
       className={`flex flex-col bg-white shadow-md rounded-xl overflow-hidden hover:shadow-xl transition border border-blue-900 h-full`}
     >
-      <Link href={`/catalog/${item._id}`} className="block flex-grow">
+      <Link href={`/catalog/${item.id}`} className="block grow">
         {/* Product Image */}
-        <div className="w-full h-[200px] sm:h-[240px] md:h-[280px] aspect-[3/4] overflow-hidden border-b border-blue-900">
+        <div className="w-full h-[200px] sm:h-60 md:h-[280px] aspect-3/4 overflow-hidden border-b border-blue-900">
           {primaryImage ? (
             <Image
               key={primaryImage.publicId}

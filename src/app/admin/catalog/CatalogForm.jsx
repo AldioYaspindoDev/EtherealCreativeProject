@@ -56,8 +56,7 @@ export default function CatalogForm({
       if (initialData.variants?.length > 0) {
         setVariants(
           initialData.variants.map((v, idx) => ({
-            id: v._id || Date.now() + idx,
-            _id: v._id,
+            id: v.id || Date.now() + idx,
             productPrice: v.productPrice || "",
             stock: v.stock || 0,
             color: v.color || "",
@@ -192,7 +191,7 @@ export default function CatalogForm({
 
     // Prepare variants data
     const variantsData = variants.map((v) => ({
-      _id: v._id,
+      id: v.id,
       productPrice: Number(v.productPrice),
       stock: Number(v.stock),
       color: v.color?.trim() || "",

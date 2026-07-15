@@ -21,6 +21,7 @@ export default function AboutSablon() {
             src="/assetgambar/sablon1.webp"
             alt="Sablon Ethereal"
             fill // Menggunakan 'fill' agar gambar mengisi div container
+            sizes="(max-width: 768px) 100vw, 50vw"
             className="rounded-xl shadow-lg object-cover" // object-cover agar gambar tidak terdistorsi
           />
         </div>

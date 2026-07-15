@@ -70,6 +70,7 @@ export default function UpdateArticlePage() {
             boxShadow: "0 4px 20px rgba(0, 0, 0, 0.3)",
           },
         });
+        router.refresh();
         router.push("/admin/article");
       }
     } catch (error) {

@@ -16,7 +16,7 @@ export default function PortofolioTable({ initialPortofolios }) {
     try {
       await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/portofolio/${id}`);
 
-      setPortofolios((prev) => prev.filter((item) => item._id !== id));
+      setPortofolios((prev) => prev.filter((item) => item.id !== id));
       toast.success("Berhasil menghapus portofolio");
     } catch (error) {
       console.error(error);
@@ -89,7 +89,7 @@ export default function PortofolioTable({ initialPortofolios }) {
             ) : (
               filteredPortofolios.map((portofolio, index) => (
                 <tr
-                  key={portofolio._id}
+                  key={portofolio.id}
                   className="hover:bg-blue-50/30 transition-colors group"
                 >
                   <td className="px-6 py-4 text-sm text-gray-500">
@@ -114,14 +114,14 @@ export default function PortofolioTable({ initialPortofolios }) {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Link
-                        href={`/admin/portofolio/${portofolio._id}`}
+                        href={`/admin/portofolio/${portofolio.id}`}
                         className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                         title="Edit"
                       >
                         <Pencil className="w-4 h-4" />
                       </Link>
                       <button
-                        onClick={() => handleDelete(portofolio._id)}
+                        onClick={() => handleDelete(portofolio.id)}
                         className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                         title="Hapus"
                       >

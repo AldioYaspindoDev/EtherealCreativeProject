@@ -2,12 +2,14 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import api from "@/utils/axios";
-import Image from "next/image";
 import { useRouter } from "next/navigation";
-import { FaWhatsapp } from "react-icons/fa";
 import toast from "react-hot-toast";
 import { useCart } from "@/context/CartContext";
 
+import EmptyCart from "./components/EmptyCart";
+import UnauthenticatedCart from "./components/UnauthenticatedCart";
+import CartItem from "./components/CartItem";
+import CartSummary from "./components/CartSummary";
 export default function CartPage() {
   const [userId, setUserId] = useState(null);
   const [userData, setUserData] = useState(null);
@@ -28,8 +30,8 @@ export default function CartPage() {
 
         const data = res.data;
 
-        if (data?.user?._id) {
-          setUserId(data.user._id);
+        if (data?.user?.id) {
+          setUserId(data.user.id);
           setUserData(data.user);
         } else {
           console.log("User belum login");
@@ -61,7 +63,7 @@ export default function CartPage() {
 
         // Select all items by default
         if (res.data.cart?.items) {
-          setSelectedItems(res.data.cart.items.map((item) => item._id));
+          setSelectedItems(res.data.cart.items.map((item) => item.id));
         }
       } catch (err) {
         console.error("Error fetching cart:", err);
@@ -93,7 +95,7 @@ export default function CartPage() {
     if (selectedItems.length === cart.items.length) {
       setSelectedItems([]);
     } else {
-      setSelectedItems(cart.items.map((item) => item._id));
+      setSelectedItems(cart.items.map((item) => item.id));
     }
   };
 
@@ -164,24 +166,34 @@ export default function CartPage() {
 
   // Get item price (from variant or product)
   const getItemPrice = (item) => {
+    // Backend Sequelize mengembalikan data varian di variantDetails (GET /cart)
+    if (item.variantDetails?.productPrice) {
+      return Number(item.variantDetails.productPrice);
+    }
+    
+    // Response dari POST /cart/add atau PUT /cart/update me-return objek variant secara langsung
+    if (item.variant?.productPrice) {
+      return Number(item.variant.productPrice);
+    }
+
     // 1. Check if price is stored directly in cart item
-    if (item.price) return item.price;
+    if (item.price) return Number(item.price);
 
     // 2. Find variant by variantId and get its price
     if (item.variantId && item.product?.variants) {
       const variant = item.product.variants.find(
-        (v) => v._id === item.variantId,
+        (v) => v.id === item.variantId,
       );
-      if (variant?.productPrice) return variant.productPrice;
+      if (variant?.productPrice) return Number(variant.productPrice);
     }
 
     // 3. If only one variant, use its price
     if (item.product?.variants?.length > 0) {
-      return item.product.variants[0].productPrice || 0;
+      return Number(item.product.variants[0].productPrice) || 0;
     }
 
     // 4. Fallback to legacy productPrice
-    return item.product?.productPrice || 0;
+    return Number(item.product?.productPrice) || 0;
   };
 
   // Hitung total harga item yang dipilih
@@ -189,7 +201,7 @@ export default function CartPage() {
     if (!cart || !cart.items) return 0;
 
     return cart.items
-      .filter((item) => selectedItems.includes(item._id))
+      .filter((item) => selectedItems.includes(item.id))
       .reduce((total, item) => {
         const price = getItemPrice(item);
         return total + price * item.quantity;
@@ -201,6 +213,18 @@ export default function CartPage() {
     // Cek apakah ada image di item (dari cart - variant image)
     if (item.image) {
       return item.image;
+    }
+
+    // Cek dari data varian backend Sequelize (GET /cart)
+    if (item.variantDetails?.productImages?.length > 0) {
+      const primaryImage = item.variantDetails.productImages.find((img) => img.isPrimary);
+      return primaryImage?.url || item.variantDetails.productImages[0]?.url;
+    }
+
+    // Cek dari data varian backend Sequelize secara langsung (POST /cart/add & PUT /cart/update)
+    if (item.variant?.productImages?.length > 0) {
+      const primaryImage = item.variant.productImages.find((img) => img.isPrimary);
+      return primaryImage?.url || item.variant.productImages[0]?.url;
     }
 
     const product = item.product || {};
@@ -254,7 +278,7 @@ export default function CartPage() {
     }
 
     const itemsToOrder = cart.items.filter((item) =>
-      selectedItems.includes(item._id),
+      selectedItems.includes(item.id),
     );
 
     const totalOrderAmount = calculateSelectedTotal();
@@ -267,7 +291,7 @@ export default function CartPage() {
         customerName: userData?.username || "Guest",
         customerPhone: userData?.nomorhp || "-",
         items: itemsToOrder.map((item) => ({
-          productId: item.product._id,
+          productId: item.product.id,
           variantId: item.variantId,
           productName: item.product.productName,
           quantity: item.quantity,
@@ -362,47 +386,7 @@ export default function CartPage() {
 
   // No cart data
   if (!cart) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6">
-        <div className="text-center max-w-md">
-          {/* Icon / Illustration */}
-          <div className="mb-6">
-            <svg
-              width="120"
-              height="120"
-              viewBox="0 0 24 24"
-              className="mx-auto text-gray-400"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-            >
-              <path d="M3 3h2l.4 2M7 13h10l4-8H5.4" />
-              <circle cx="9" cy="19" r="2" />
-              <circle cx="17" cy="19" r="2" />
-            </svg>
-          </div>
-
-          {/* Title */}
-          <h1 className="text-2xl font-semibold text-black mb-3">
-            Keranjang Masih Kosong
-          </h1>
-
-          {/* Message */}
-          <p className="text-gray-600 mb-6">
-            Kamu harus login terlebih dahulu sebelum bisa menambahkan produk ke
-            keranjang.
-          </p>
-
-          {/* Login Button */}
-          <Link
-            href="/login"
-            className="block w-full bg-blue-900 text-white py-3 rounded-xl text-lg font-medium hover:bg-blue-800 transition-all"
-          >
-            Login Sekarang
-          </Link>
-        </div>
-      </div>
-    );
+    return <UnauthenticatedCart />;
   }
 
   const totalSelected = calculateSelectedTotal();
@@ -421,40 +405,9 @@ export default function CartPage() {
         </div>
 
         {!cart.items || cart.items.length === 0 ? (
-          /* Empty State */
-          <div className="text-center py-12 sm:py-16 bg-white rounded-xl shadow-sm">
-            <div className="mb-6">
-              <svg
-                width="100"
-                height="100"
-                viewBox="0 0 24 24"
-                className="mx-auto text-gray-300"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <path d="M3 3h2l.4 2M7 13h10l4-8H5.4" />
-                <circle cx="9" cy="19" r="2" />
-                <circle cx="17" cy="19" r="2" />
-              </svg>
-            </div>
-            <h2 className="text-lg sm:text-xl font-semibold text-gray-800 mb-2">
-              Keranjang Masih Kosong
-            </h2>
-            <p className="text-sm sm:text-base text-gray-600 mb-6">
-              Yuk, mulai belanja dan tambahkan produk ke keranjang!
-            </p>
-            <Link
-              href="/catalog"
-              className="inline-block bg-blue-900 text-white px-6 sm:px-8 py-2.5 sm:py-3 rounded-lg sm:rounded-xl hover:bg-blue-800 transition-colors font-medium text-sm sm:text-base"
-            >
-              Mulai Belanja
-            </Link>
-          </div>
+          <EmptyCart />
         ) : (
-          /* Main Content - Two Column Layout on Desktop */
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4 md:gap-6">
-            {/* Left Column - Cart Items (Desktop: 8/12, Mobile: full) */}
             <div className="md:col-span-8">
               {/* Select All */}
               <div className="flex items-center justify-between gap-2 p-3 sm:p-4 bg-white rounded-lg shadow-sm mb-3 sm:mb-4">
@@ -479,221 +432,26 @@ export default function CartPage() {
 
               {/* Cart Items List */}
               <ul className="space-y-3 sm:space-y-4">
-                {cart.items.map((item) => {
-                  const product = item.product || {};
-                  const imgSrc = getProductImageUrl(item);
-                  const itemPrice = getItemPrice(item);
-                  const isSelected = selectedItems.includes(item._id);
-
-                  return (
-                    <li
-                      key={item._id}
-                      className={`bg-white border rounded-lg sm:rounded-xl p-3 sm:p-4 transition-all ${
-                        isSelected
-                          ? "border-blue-900 bg-blue-50 shadow-md"
-                          : "border-gray-200 shadow-sm hover:shadow-md"
-                      }`}
-                    >
-                      <div className="flex items-start gap-2 sm:gap-3 md:gap-4">
-                        {/* Checkbox */}
-                        <input
-                          type="checkbox"
-                          checked={isSelected}
-                          onChange={() => toggleSelectItem(item._id)}
-                          className="w-4 h-4 sm:w-5 sm:h-5 cursor-pointer accent-blue-900 mt-1 flex-shrink-0"
-                        />
-
-                        {/* Product Image */}
-                        <Link
-                          href={`/catalog/${product._id}`}
-                          className="relative w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 flex-shrink-0 rounded-md overflow-hidden border border-gray-200"
-                        >
-                          <Image
-                            src={imgSrc}
-                            alt={product.productName || "Produk"}
-                            fill
-                            className="object-cover"
-                            onError={(e) => {
-                              e.target.src = "/placeholder.png";
-                            }}
-                          />
-                        </Link>
-
-                        {/* Product Info */}
-                        <div className="flex-1 min-w-0">
-                          <Link href={`/catalog/${product._id}`}>
-                            <h2 className="text-sm sm:text-base md:text-lg font-medium text-black mb-1 line-clamp-2 hover:text-blue-900 transition">
-                              {product.productName ||
-                                "Nama produk tidak tersedia"}
-                            </h2>
-                          </Link>
-
-                          {/* Color & Size */}
-                          {(item.selectedColor ||
-                            item.color ||
-                            item.selectedSize ||
-                            item.size) && (
-                            <div className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 mb-2">
-                              {(item.selectedColor || item.color) && (
-                                <span className="flex items-center gap-1">
-                                  <span className="text-gray-500">Warna:</span>
-                                  <span className="font-medium">
-                                    {item.selectedColor || item.color}
-                                  </span>
-                                </span>
-                              )}
-                              {(item.selectedColor || item.color) &&
-                                (item.selectedSize || item.size) && (
-                                  <span className="text-gray-400">•</span>
-                                )}
-                              {(item.selectedSize || item.size) && (
-                                <span className="flex items-center gap-1">
-                                  <span className="text-gray-500">Ukuran:</span>
-                                  <span className="font-medium">
-                                    {item.selectedSize || item.size}
-                                  </span>
-                                </span>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Price */}
-                          <p className="text-sm sm:text-base md:text-lg font-semibold text-blue-900 mb-3">
-                            Rp {itemPrice.toLocaleString("id-ID")}
-                          </p>
-
-                          {/* Quantity Controls & Actions - Mobile: Horizontal, Desktop: Better spacing */}
-                          <div className="flex items-center justify-between gap-2 sm:gap-3">
-                            {/* Quantity Controls */}
-                            <div className="flex items-center gap-1 sm:gap-2 border border-blue-900 rounded-lg">
-                              <button
-                                onClick={() =>
-                                  updateQuantity(item._id, item.quantity - 1)
-                                }
-                                disabled={item.quantity <= 1}
-                                className="px-2 sm:px-3 py-1 sm:py-1.5 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed font-bold text-base text-blue-900 sm:text-lg transition-colors"
-                              >
-                                −
-                              </button>
-                              <span className="px-2 sm:px-3 py-1 min-w-[32px] sm:min-w-[40px] text-center font-medium text-sm sm:text-base text-blue-900">
-                                {item.quantity}
-                              </span>
-                              <button
-                                onClick={() =>
-                                  updateQuantity(item._id, item.quantity + 1)
-                                }
-                                className="px-2 sm:px-3 py-1 sm:py-1.5 hover:bg-gray-100 font-bold text-base text-blue-900 sm:text-lg transition-colors"
-                              >
-                                +
-                              </button>
-                            </div>
-
-                            {/* Subtotal */}
-                            <div className="flex items-center gap-2 sm:gap-3">
-                              <p className="text-sm sm:text-base font-bold text-blue-900">
-                                Rp{" "}
-                                {(itemPrice * item.quantity).toLocaleString(
-                                  "id-ID",
-                                )}
-                              </p>
-
-                              {/* Delete Button */}
-                              <button
-                                onClick={() => handleRemove(item._id)}
-                                className="text-red-600 hover:text-red-700 hover:underline text-xs sm:text-sm font-medium transition-colors"
-                              >
-                                Hapus
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </li>
-                  );
-                })}
+                {cart.items.map((item) => (
+                  <CartItem
+                    key={item.id}
+                    item={item}
+                    isSelected={selectedItems.includes(item.id)}
+                    imgSrc={getProductImageUrl(item)}
+                    itemPrice={getItemPrice(item)}
+                    toggleSelectItem={toggleSelectItem}
+                    updateQuantity={updateQuantity}
+                    handleRemove={handleRemove}
+                  />
+                ))}
               </ul>
             </div>
 
-            {/* Right Column - Summary (Desktop: Sticky, Mobile: Fixed Bottom) */}
-            {/* Desktop Summary - Sticky Right Column */}
-            <div className="hidden md:block md:col-span-4">
-              <div className="sticky top-4">
-                <div className="bg-white border border-gray-200 rounded-xl p-5 lg:p-6 shadow-lg">
-                  <h3 className="text-lg lg:text-xl font-bold text-black mb-4 lg:mb-5">
-                    Ringkasan Belanja
-                  </h3>
-
-                  <div className="space-y-3 mb-4 lg:mb-5">
-                    <div className="flex justify-between items-center text-sm lg:text-base">
-                      <span className="text-gray-600">
-                        Subtotal ({selectedItems.length} produk)
-                      </span>
-                      <span className="font-semibold text-black">
-                        Rp {totalSelected.toLocaleString("id-ID")}
-                      </span>
-                    </div>
-                    <div className="flex justify-between items-center text-sm">
-                      <span className="text-gray-600">Pengiriman</span>
-                      <span className="text-gray-500 text-xs">
-                        Dihitung di checkout
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="border-t border-gray-200 pt-4 lg:pt-5 mb-5 lg:mb-6">
-                    <div className="flex justify-between items-center mb-5 lg:mb-6">
-                      <span className="font-bold text-lg lg:text-xl text-black">
-                        Total
-                      </span>
-                      <span className="font-bold text-xl lg:text-2xl text-blue-900">
-                        Rp {totalSelected.toLocaleString("id-ID")}
-                      </span>
-                    </div>
-
-                    <button
-                      onClick={orderHandler}
-                      disabled={selectedItems.length === 0}
-                      className="w-full bg-blue-900 text-white py-3 lg:py-3.5 rounded-xl hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all font-semibold text-base lg:text-lg flex items-center justify-center gap-2 shadow-md hover:shadow-lg"
-                    >
-                      <span>Pesan Sekarang</span>
-                      <FaWhatsapp className="text-xl lg:text-2xl" />
-                    </button>
-                  </div>
-
-                  <p className="text-xs text-gray-500 text-center">
-                    Pesan akan lansung terkirim menuju WhatsApp admin setelah
-                    klik pesan sekarang, terima kasih
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Mobile Summary - Fixed Bottom Bar */}
-            <div className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-2xl z-50 safe-bottom">
-              <div className="px-4 py-3 sm:py-4">
-                <div className="flex items-center justify-between gap-3">
-                  {/* Total Info */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-600 mb-0.5">
-                      Total ({selectedItems.length} produk)
-                    </p>
-                    <p className="font-bold text-base sm:text-lg text-blue-900 truncate">
-                      Rp {totalSelected.toLocaleString("id-ID")}
-                    </p>
-                  </div>
-
-                  {/* Order Button */}
-                  <button
-                    onClick={orderHandler}
-                    disabled={selectedItems.length === 0}
-                    className="bg-blue-900 text-white px-5 sm:px-6 py-2.5 sm:py-3 rounded-lg hover:bg-blue-800 disabled:bg-gray-400 disabled:cursor-not-allowed transition-all font-semibold text-sm sm:text-base flex items-center gap-2 shadow-lg flex-shrink-0"
-                  >
-                    <span>Pesan</span>
-                    <FaWhatsapp className="text-lg sm:text-xl" />
-                  </button>
-                </div>
-              </div>
-            </div>
+            <CartSummary
+              selectedItemsCount={selectedItems.length}
+              totalSelected={totalSelected}
+              orderHandler={orderHandler}
+            />
           </div>
         )}
       </div>

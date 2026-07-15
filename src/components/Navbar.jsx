@@ -102,6 +102,7 @@ export default function Navbar() {
                 height={40}
                 priority
                 className="w-full h-auto object-contain"
+                style={{ width: "auto", height: "auto" }}
               />
             </Link>
           </div>
@@ -160,9 +161,9 @@ export default function Navbar() {
                       <div className="max-h-[300px] overflow-y-auto scrollbar-thin scrollbar-thumb-gray-200">
                         {results.map((product) => (
                           <div
-                            key={product._id}
+                            key={product.id}
                             onClick={() => {
-                              router.push(`/catalog/${product._id}`);
+                              router.push(`/catalog/${product.id}`);
                               setShowDropdown(false);
                               setSearchQuery("");
                             }}
@@ -320,9 +321,9 @@ export default function Navbar() {
               <div className="mt-2 space-y-2">
                 {results.slice(0, 3).map((p) => (
                   <div
-                    key={p._id}
+                    key={p.id}
                     onClick={() => {
-                      router.push(`/catalog/${p._id}`);
+                      router.push(`/catalog/${p.id}`);
                       toggleMenu();
                     }}
                     className="flex items-center gap-3 p-2 bg-gray-50 rounded-lg"

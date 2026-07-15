@@ -116,7 +116,7 @@ export default function OrderTable() {
 
       setOrders((prev) =>
         prev.map((order) =>
-          order._id === orderId ? { ...order, status: newStatus } : order
+          order.id === orderId ? { ...order, status: newStatus } : order
         )
       );
       toast.success(`Status berhasil diubah ke ${getStatusText(newStatus)}`);
@@ -153,7 +153,7 @@ export default function OrderTable() {
 
       // Update state
       setOrders((prev) =>
-        prev.filter((order) => !selectedOrders.includes(order._id))
+        prev.filter((order) => !selectedOrders.includes(order.id))
       );
       setSelectedOrders([]);
       toast.success(`${selectedOrders.length} pesanan berhasil dihapus`);
@@ -177,16 +177,17 @@ export default function OrderTable() {
     if (selectedOrders.length === filteredOrders.length) {
       setSelectedOrders([]);
     } else {
-      setSelectedOrders(filteredOrders.map((order) => order._id));
+      setSelectedOrders(filteredOrders.map((order) => order.id));
     }
   };
 
   const formatPrice = (price) => {
+    const numericPrice = Number(price) || 0;
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
       currency: "IDR",
       minimumFractionDigits: 0,
-    }).format(price);
+    }).format(numericPrice);
   };
 
   const getStatusText = (status) => {
@@ -238,7 +239,7 @@ export default function OrderTable() {
     const matchesSearch =
       order.customerName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       order.customerPhone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      order._id?.toLowerCase().includes(searchTerm.toLowerCase());
+      String(order.id || "").toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesStatus =
       statusFilter === "all" || order.status === statusFilter;
@@ -267,7 +268,10 @@ export default function OrderTable() {
     verified: orders.filter((o) => o.status === "verified").length,
     completed: orders.filter((o) => o.status === "completed").length,
     cancelled: orders.filter((o) => o.status === "cancelled").length,
-    totalAmount: orders.reduce((sum, o) => sum + (o.totalAmount || 0), 0),
+    totalAmount: orders.reduce(
+      (sum, o) => sum + Number(o.totalAmount || o.total_amount || 0),
+      0
+    ),
   };
 
   // Fungsi Generate PDF - Template seperti gambar
@@ -514,7 +518,7 @@ export default function OrderTable() {
                       : "-"
                   }</td>
                   <td class="text-center">${order.items?.length || 0}</td>
-                  <td class="price">${formatPrice(order.totalAmount || 0)}</td>
+                  <td class="price">${formatPrice(order.totalAmount || order.total_amount || 0)}</td>
                   <td>
                     <span class="status-badge status-${
                       order.status || "pending"
@@ -549,7 +553,10 @@ export default function OrderTable() {
             <div class="summary-row total">
               <span>Total Pendapatan:</span>
               <span>${formatPrice(
-                filteredOrders.reduce((sum, o) => sum + (o.totalAmount || 0), 0)
+                filteredOrders.reduce(
+                  (sum, o) => sum + Number(o.totalAmount || o.total_amount || 0),
+                  0
+                )
               )}</span>
             </div>
           </div>
@@ -819,16 +826,16 @@ export default function OrderTable() {
               ) : (
                 filteredOrders.map((order, index) => (
                   <tr
-                    key={order._id}
+                    key={order.id}
                     className={`hover:bg-blue-50/30 transition-colors group ${
-                      selectedOrders.includes(order._id) ? "bg-blue-50/50" : ""
+                      selectedOrders.includes(order.id) ? "bg-blue-50/50" : ""
                     }`}
                   >
                     <td className="px-4 py-4 text-center">
                       <input
                         type="checkbox"
-                        checked={selectedOrders.includes(order._id)}
-                        onChange={() => toggleSelectOrder(order._id)}
+                        checked={selectedOrders.includes(order.id)}
+                        onChange={() => toggleSelectOrder(order.id)}
                         className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                       />
                     </td>
@@ -837,7 +844,7 @@ export default function OrderTable() {
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-mono text-sm px-2 py-1 bg-gray-100 rounded text-gray-700">
-                        #{order._id?.slice(-6).toUpperCase()}
+                        #{String(order.id).padStart(6, '0')}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -861,7 +868,7 @@ export default function OrderTable() {
                       {order.items?.length || 0} item
                     </td>
                     <td className="px-6 py-4 text-sm font-semibold text-gray-900">
-                      {formatPrice(order.totalAmount || 0)}
+                      {formatPrice(order.totalAmount || order.total_amount || 0)}
                     </td>
                     <td className="px-6 py-4">
                       <span
@@ -879,7 +886,7 @@ export default function OrderTable() {
                         {(!order.status || order.status === "pending") && (
                           <button
                             onClick={() =>
-                              updateOrderStatus(order._id, "verified")
+                              updateOrderStatus(order.id, "verified")
                             }
                             className="px-2 py-1 rounded text-xs font-medium bg-blue-100 text-blue-700 hover:bg-blue-200 transition-colors"
                             title="Verifikasi Pesanan"
@@ -892,7 +899,7 @@ export default function OrderTable() {
                         {order.status === "verified" && (
                           <button
                             onClick={() =>
-                              updateOrderStatus(order._id, "completed")
+                              updateOrderStatus(order.id, "completed")
                             }
                             className="px-2 py-1 rounded text-xs font-medium bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
                             title="Tandai Selesai"
@@ -907,7 +914,7 @@ export default function OrderTable() {
                           order.status === "verified") && (
                           <button
                             onClick={() =>
-                              updateOrderStatus(order._id, "cancelled")
+                              updateOrderStatus(order.id, "cancelled")
                             }
                             className="px-2 py-1 rounded text-xs font-medium bg-red-100 text-red-700 hover:bg-red-200 transition-colors"
                             title="Batalkan Pesanan"

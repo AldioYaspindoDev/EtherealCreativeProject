@@ -25,7 +25,7 @@ export default function ArticleTable({ initialArtikels = [] }) {
     if (!confirm("Yakin ingin menghapus artikel ini?")) return;
     try {
       await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/articles/${id}`);
-      setArtikels((prev) => prev.filter((item) => item._id !== id));
+      setArtikels((prev) => prev.filter((item) => item.id !== id));
       toast.success("Artikel berhasil dihapus");
     } catch (error) {
       console.error(error);
@@ -35,8 +35,8 @@ export default function ArticleTable({ initialArtikels = [] }) {
 
   const filteredArtikels = artikels.filter(
     (artikel) =>
-      artikel.JudulArtikel?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      artikel.IsiArtikel?.toLowerCase().includes(searchTerm.toLowerCase())
+      artikel.judulArtikel?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      artikel.isiArtikel?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -101,7 +101,7 @@ export default function ArticleTable({ initialArtikels = [] }) {
             ) : (
               filteredArtikels.map((artikel, index) => (
                 <tr
-                  key={artikel._id}
+                  key={artikel.id}
                   className="hover:bg-blue-50/30 transition-colors group"
                 >
                   <td className="px-6 py-4 text-sm text-gray-500">
@@ -109,20 +109,20 @@ export default function ArticleTable({ initialArtikels = [] }) {
                   </td>
                   <td className="px-6 py-4">
                     <img
-                      src={artikel.ImageUrl}
-                      alt={artikel.JudulArtikel}
+                      src={artikel.imageUrl || "https://placehold.co/600x400/D1D5DB/1F2937?text=No+Image"}
+                      alt={artikel.judulArtikel}
                       className="w-16 h-12 object-cover rounded-md border border-gray-200"
                     />
                   </td>
                   <td className="px-6 py-4 max-w-xs">
                     <div
                       className="text-sm font-medium text-gray-900 line-clamp-1"
-                      title={artikel.JudulArtikel}
+                      title={artikel.judulArtikel}
                     >
-                      {artikel.JudulArtikel}
+                      {artikel.judulArtikel}
                     </div>
                     <div className="text-xs text-gray-500 mt-1 line-clamp-2">
-                      {truncateText(artikel.IsiArtikel, 80)}
+                      {truncateText(artikel.isiArtikel, 80)}
                     </div>
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500 whitespace-nowrap">
@@ -131,14 +131,14 @@ export default function ArticleTable({ initialArtikels = [] }) {
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end gap-2">
                       <Link
-                        href={`/admin/article/${artikel._id}`}
+                        href={`/admin/article/${artikel.id}`}
                         className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                         title="Edit"
                       >
                         <Pencil className="w-4 h-4" />
                       </Link>
                       <button
-                        onClick={() => handleDelete(artikel._id)}
+                        onClick={() => handleDelete(artikel.id)}
                         className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                         title="Hapus"
                       >

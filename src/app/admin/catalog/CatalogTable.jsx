@@ -16,7 +16,7 @@ export default function CatalogTable({ initialCatalogs }) {
     try {
       await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}`);
 
-      setCatalogs((prev) => prev.filter((item) => item._id !== id));
+      setCatalogs((prev) => prev.filter((item) => item.id !== id));
       toast.success("Berhasil menghapus catalog");
     } catch (error) {
       console.error(error);
@@ -146,7 +146,7 @@ export default function CatalogTable({ initialCatalogs }) {
 
                 return (
                   <tr
-                    key={catalog._id}
+                    key={catalog.id}
                     className="hover:bg-blue-50/30 transition-colors group"
                   >
                     <td className="px-6 py-4 text-sm text-gray-500">
@@ -206,14 +206,14 @@ export default function CatalogTable({ initialCatalogs }) {
                     <td className="px-6 py-4 text-right">
                       <div className="flex items-center justify-end gap-2">
                         <Link
-                          href={`/admin/catalog/${catalog._id}`}
+                          href={`/admin/catalog/${catalog.id}`}
                           className="p-1.5 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-100 transition-colors"
                           title="Edit"
                         >
                           <Pencil className="w-4 h-4" />
                         </Link>
                         <button
-                          onClick={() => handleDelete(catalog._id)}
+                          onClick={() => handleDelete(catalog.id)}
                           className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                           title="Hapus"
                         >

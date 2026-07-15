@@ -14,7 +14,7 @@ export default function FeedbackTable({ initialFeedbacks = [] }) {
 
     try {
       await axios.delete(`${process.env.NEXT_PUBLIC_API_URL}/feedbacks/${id}`);
-      setFeedbacks(feedbacks.filter((f) => f._id !== id));
+      setFeedbacks(feedbacks.filter((f) => f.id !== id));
       toast.success("Feedback berhasil dihapus!");
     } catch (error) {
       console.error("Gagal menghapus feedback:", error);
@@ -93,7 +93,7 @@ export default function FeedbackTable({ initialFeedbacks = [] }) {
             ) : (
               filteredFeedbacks.map((feedback, index) => (
                 <tr
-                  key={feedback._id}
+                  key={feedback.id}
                   className="hover:bg-blue-50/30 transition-colors"
                 >
                   <td className="px-6 py-4 text-sm text-gray-500 text-center">
@@ -105,7 +105,7 @@ export default function FeedbackTable({ initialFeedbacks = [] }) {
                   <td className="px-6 py-4">{renderStars(feedback.rating)}</td>
                   <td className="px-6 py-4 text-right">
                     <button
-                      onClick={() => handleDelete(feedback._id)}
+                      onClick={() => handleDelete(feedback.id)}
                       className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                       title="Hapus"
                     >

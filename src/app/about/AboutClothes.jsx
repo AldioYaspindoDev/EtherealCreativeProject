@@ -21,6 +21,7 @@ export default function AboutClothes() {
             src="/assetgambar/imagestore5.webp"
             alt="Produk Ethereal"
             fill // Menggunakan 'fill' agar gambar mengisi div container
+            sizes="(max-width: 768px) 100vw, 50vw"
             className="rounded-xl shadow-lg object-cover"
           />
         </div>

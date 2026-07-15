@@ -1,4 +1,4 @@
-"use client";
+  "use client";
 
 import { useEffect, useState } from "react";
 import axios from "axios";
@@ -61,21 +61,21 @@ export default function ArticleContent() {
             Artikel
           </Link>
           <span className="mx-2">/</span>
-          <span className="text-gray-900">{artikel.JudulArtikel}</span>
+          <span className="text-gray-900">{artikel.judulArtikel}</span>
         </nav>
       </div>
 
       {/* Header Article */}
       <header className="max-w-4xl mx-auto px-4 py-8">
         <h1 className="text-4xl md:text-5xl font-bold text-gray-900 mb-4 leading-tight">
-          {artikel.JudulArtikel}
+          {artikel.judulArtikel}
         </h1>
 
-        {artikel.ImageUrl && (
+        {artikel.imageUrl && (
           <div className="w-full h-96 rounded-lg overflow-hidden shadow-lg mb-8">
             <img
-              src={artikel.ImageUrl}
-              alt={artikel.JudulArtikel}
+              src={artikel.imageUrl}
+              alt={artikel.judulArtikel}
               className="w-full h-full object-cover"
             />
           </div>
@@ -86,7 +86,7 @@ export default function ArticleContent() {
       <section className="max-w-4xl mx-auto px-4 pb-16">
         <div className="bg-white rounded-lg shadow-sm p-8 md:p-12">
           <div className="text-gray-800 leading-relaxed whitespace-pre-line">
-            {artikel.IsiArtikel}
+            {artikel.isiArtikel}
           </div>
         </div>
 

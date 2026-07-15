@@ -11,14 +11,14 @@ const poppins = Poppins({
 export default function ArticleCard({ item }) {
   console.log("Cek Data Item:", item);
   // Pastikan item memiliki properti yang diperlukan untuk mencegat error
-  const title = item.JudulArtikel || "Judul Tidak Tersedia";
-  const excerpt = item.IsiArtikel
-    ? item.IsiArtikel.slice(0, 60)
+  const title = item.judulArtikel || "Judul Tidak Tersedia";
+  const excerpt = item.isiArtikel
+    ? item.isiArtikel.slice(0, 60)
     : "Tidak ada deskripsi singkat.";
-  const linkHref = item._id ? `/articles/${item._id}` : "#";
+  const linkHref = item.id ? `/articles/${item.id}` : "#";
 
   return (
-    <div
+    <article
       // Memastikan kartu mengisi tinggi kolomnya dan memiliki tampilan yang bagus
       className={`flex flex-col bg-white shadow-md rounded-xl overflow-hidden hover:shadow-lg hover:shadow-gray-300 transition duration-300 transform hover:-translate-y-0.5 ${poppins.className} h-full`}
     >
@@ -26,7 +26,7 @@ export default function ArticleCard({ item }) {
       <div className="w-full h-[160px] sm:h-[200px] md:h-[220px] overflow-hidden">
         <img
           src={
-            item.ImageUrl ||
+            item.imageUrl ||
             "https://placehold.co/600x400/D1D5DB/1F2937?text=No+Image"
           }
           alt={title}
@@ -54,6 +54,6 @@ export default function ArticleCard({ item }) {
           Baca Selengkapnya
         </Link>
       </div>
-    </div>
+    </article>
   );
 }

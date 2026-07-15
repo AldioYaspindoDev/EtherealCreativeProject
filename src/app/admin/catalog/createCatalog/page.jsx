@@ -54,7 +54,7 @@ export default function CreateCatalogPage() {
         },
       );
 
-      const catalogId = response.data.data._id;
+      const catalogId = response.data.data.id;
 
       // If there are more variants, add them using addVariant endpoint
       if (data.variants.length > 1) {

@@ -5,9 +5,9 @@ import axios from "axios";
 import ArticleCard from "@/components/ArticleCard";
 import { useScrollAnimation } from "@/hooks/useScrollAnimation";
 
-export default function ArticleSection() {
-  const [artikels, setArtikels] = useState([]);
-  const [loading, setLoading] = useState(true);
+export default function ArticleSection({ initialData = null }) {
+  const [artikels, setArtikels] = useState(initialData || []);
+  const [loading, setLoading] = useState(initialData === null);
   
   const [titleRef, titleVisible] = useScrollAnimation({ threshold: 0.2 });
   const [gridRef, gridVisible] = useScrollAnimation({ threshold: 0.1 });
@@ -40,8 +40,10 @@ export default function ArticleSection() {
   };
 
   useEffect(() => {
-    fetchArtikels();
-  }, []);
+    if (initialData === null) {
+      fetchArtikels();
+    }
+  }, [initialData]);
 
   if (loading) {
     return (
@@ -60,10 +62,17 @@ export default function ArticleSection() {
   }
 
   return (
-  <section className="w-full bg-white py-12 md:py-20">
+  <section 
+    id="artikel-terbaru" 
+    aria-labelledby="artikel-heading" 
+    className="w-full bg-white py-12 md:py-20"
+  >
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       {/* HAPUS ref={titleRef} dan class scroll-animate dari Judul jika judul juga hilang */}
-      <h2 className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-center text-black mb-10 md:mb-16">
+      <h2 
+        id="artikel-heading" 
+        className="text-3xl sm:text-4xl lg:text-5xl font-semibold text-center text-black mb-10 md:mb-16"
+      >
         Artikel
       </h2>
       

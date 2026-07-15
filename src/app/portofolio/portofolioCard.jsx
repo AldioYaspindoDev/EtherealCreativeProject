@@ -45,6 +45,7 @@ export default function PortofolioCard({ item }) {
           alt={item.keterangan}
           height={500}
           width={500}
+          unoptimized={true}
           // Image harus diatur sebagai 'absolute' untuk mengisi container padding-top
           className="**absolute top-0 left-0 h-full w-full** object-cover transition-transform duration-500 **group-hover:scale-110**"
         />

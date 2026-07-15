@@ -160,17 +160,17 @@ export default function ProductDetail({ params }) {
 
       // DEBUG: Log what's being sent
       console.log("=== ADD TO CART DEBUG ===");
-      console.log("productId:", product._id);
-      console.log("variantId:", selectedVariant._id);
+      console.log("productId:", product.id);
+      console.log("variantId:", selectedVariant.id);
       console.log("selectedColor:", selectedColor);
       console.log("selectedSize:", selectedSize);
       console.log("selectedVariant:", selectedVariant);
 
       // Send data including variantId
-      const data = await addToCart(product._id, quantity, {
+      const data = await addToCart(product.id, quantity, {
         color: selectedColor,
         size: selectedSize,
-        variantId: selectedVariant._id,
+        variantId: selectedVariant.id,
       });
       refreshCart();
 
@@ -319,13 +319,13 @@ export default function ProductDetail({ params }) {
 
       // Create order with variant info
       const orderPayload = {
-        userId: currentUser?._id,
+        userId: currentUser?.id,
         customerName: currentUser?.username || "Guest",
         customerPhone: currentUser?.nomorhp || "-",
         items: [
           {
-            productId: product._id,
-            variantId: selectedVariant._id,
+            productId: product.id,
+            variantId: selectedVariant.id,
             productName: product.productName,
             quantity: quantity,
             selectedColor: selectedColor,
@@ -489,7 +489,7 @@ Apakah produk ini masih tersedia?`;
                           <button
                             key={`${img.variantIndex}-${img.originalIndex}`}
                             onClick={() => handleImageClick(index)}
-                            className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all relative ${
+                            className={`shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 transition-all relative ${
                               selectedImage === index
                                 ? "border-blue-900 ring-2 ring-blue-500"
                                 : "border-gray-200 hover:border-gray-300"
@@ -583,13 +583,16 @@ Apakah produk ini masih tersedia?`;
                 )}
 
                 {/* Size Selection */}
+
                 {selectedVariant?.sizes?.length > 0 && (
                   <div>
                     <label className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-1">
                       Pilih Ukuran <span className="text-red-500">*</span>
                     </label>
                     <div className="flex flex-wrap gap-2">
+
                       {selectedVariant.sizes.map((size) => (
+                        
                         <button
                           key={size}
                           onClick={() => setSelectedSize(size)}

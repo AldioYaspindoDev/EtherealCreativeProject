@@ -49,7 +49,7 @@ export default function UserTableClient({ initialUsers }) {
       );
 
       toast.success(`User berhasil dihapus.`);
-      setUsers((prev) => prev.filter((u) => u._id !== userId));
+      setUsers((prev) => prev.filter((u) => u.id !== userId));
     } catch (error) {
       console.error("DELETE ERROR:", error);
       const status = error?.response?.status;
@@ -68,7 +68,7 @@ export default function UserTableClient({ initialUsers }) {
   const filteredUsers = users.filter(
     (user) =>
       user.username?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      user._id?.toLowerCase().includes(searchTerm.toLowerCase())
+      user.id?.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -132,7 +132,7 @@ export default function UserTableClient({ initialUsers }) {
             ) : (
               filteredUsers.map((user, index) => (
                 <tr
-                  key={user._id}
+                  key={user.id}
                   className="hover:bg-blue-50/30 transition-colors"
                 >
                   <td className="px-6 py-4 text-sm text-gray-500">
@@ -142,12 +142,12 @@ export default function UserTableClient({ initialUsers }) {
                     {user.username}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-500 font-mono">
-                    {user._id}
+                    {user.id}
                   </td>
                   <td className="px-6 py-4 text-right">
                     <div className="flex items-center justify-end">
                       <button
-                        onClick={() => handleDeleteUser(user._id)}
+                        onClick={() => handleDeleteUser(user.id)}
                         className="p-1.5 bg-red-50 text-red-600 rounded-lg hover:bg-red-100 transition-colors"
                         title="Hapus"
                         disabled={loading}

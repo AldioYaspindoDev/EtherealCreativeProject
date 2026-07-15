@@ -21,9 +21,9 @@ export default function ArticleForm({
   useEffect(() => {
     if (initialData) {
       setFormData({
-        JudulArtikel: initialData.JudulArtikel || "",
-        IsiArtikel: initialData.IsiArtikel || "",
-        ImageUrl: initialData.ImageUrl || "",
+        JudulArtikel: initialData.judulArtikel || initialData.JudulArtikel || "",
+        IsiArtikel: initialData.isiArtikel || initialData.IsiArtikel || "",
+        ImageUrl: initialData.imageUrl || initialData.ImageUrl || "",
       });
     }
   }, [initialData]);

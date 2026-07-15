@@ -10,6 +10,7 @@ export default function UpdateCatalogPage() {
   const router = useRouter();
   const { id } = useParams();
   const [initialData, setInitialData] = useState(null);
+  const [existingVariantIds, setExistingVariantIds] = useState(new Set());
   const [pageLoading, setPageLoading] = useState(true);
   const [submitLoading, setSubmitLoading] = useState(false);
 
@@ -30,6 +31,12 @@ export default function UpdateCatalogPage() {
           category: data.category,
           variants: data.variants || [],
         });
+
+        // Simpan daftar ID varian yang benar-benar ada di database
+        if (data.variants) {
+          const ids = new Set(data.variants.map((v) => v.id));
+          setExistingVariantIds(ids);
+        }
       } catch (error) {
         console.error(error);
         toast.error("Gagal memuat data.", {
@@ -72,7 +79,10 @@ export default function UpdateCatalogPage() {
 
       // Update each variant
       for (const variant of formData.variants) {
-        if (variant._id) {
+        // Cek apakah ID varian ini ada di daftar ID original dari database
+        const isExisting = existingVariantIds.has(variant.id);
+
+        if (isExisting) {
           // Existing variant - update it
           const variantFd = new FormData();
           variantFd.append("productPrice", variant.productPrice);
@@ -104,7 +114,7 @@ export default function UpdateCatalogPage() {
           }
 
           await axios.patch(
-            `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}/variants/${variant._id}`,
+            `${process.env.NEXT_PUBLIC_API_URL}/catalogs/${id}/variants/${variant.id}`,
             variantFd,
             { headers: { "Content-Type": "multipart/form-data" } },
           );
@@ -146,10 +156,9 @@ export default function UpdateCatalogPage() {
       });
       router.push("/admin/catalog");
     } catch (error) {
-      console.error("Gagal update:", error.response?.data || error);
-      toast.error(
-        "Update gagal: " + (error.response?.data?.message || error.message),
-      );
+      console.error("Gagal update - Detail Error:", error.response?.data || error.message);
+      const serverMessage = error.response?.data?.message || error.response?.data?.error || error.message;
+      toast.error("Update gagal: " + serverMessage);
     } finally {
       setSubmitLoading(false);
     }
